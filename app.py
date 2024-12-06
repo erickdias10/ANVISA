@@ -7,7 +7,6 @@ from PyPDF2 import PdfReader
 from docx import Document
 from docx.shared import Pt
 
-
 # Funções Auxiliares
 def normalize_text(text):
     """
@@ -17,7 +16,6 @@ def normalize_text(text):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
     return re.sub(r"\s{2,}", " ", text).strip()
-
 
 def corrigir_texto(texto):
     """
@@ -33,7 +31,6 @@ def corrigir_texto(texto):
         texto = texto.replace(errado, correto)
     return texto
 
-
 def extract_text_with_pypdf2(pdf_file):
     """
     Extrai texto de PDFs usando PyPDF2.
@@ -47,7 +44,6 @@ def extract_text_with_pypdf2(pdf_file):
     except Exception as e:
         st.error(f"Erro ao processar PDF: {e}")
         return ''
-
 
 def extract_information(text):
     """
@@ -64,7 +60,6 @@ def extract_information(text):
         "socios_advogados": re.findall(socios_adv_pattern, text),
         "emails": re.findall(email_pattern, text),
     }
-
 
 def extract_addresses(text):
     """
@@ -110,32 +105,10 @@ def gerar_documento_docx(info, enderecos):
         output_path = f"Notificacao_Processo_{info.get('nome_autuado', 'Desconhecido')}.docx"
         doc = Document()
 
-        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
-        doc.add_paragraph("\n")
-
-        if enderecos:
-            for endereco in enderecos:
-                adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-                doc.add_paragraph("\n")
-
-    Gera um documento DOCX com informações do processo e endereços extraídos.
-    """
-    try:
-        # Nome do arquivo de saída
-        output_path = f"Notificacao_Processo_{info.get('nome_autuado', 'Desconhecido')}.docx"
-        doc = Document()
-
-        # Adiciona informações do autuado
-        doc.add_paragraph(f"[Ao Senhor/À Senhora]")
+        doc.add_paragraph("[Ao Senhor/À Senhora]")
         doc.add_paragraph(f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
-        # Adiciona endereços
         if enderecos:
             for endereco in enderecos:
                 doc.add_paragraph(f"Endereço: {endereco.get('endereco', '[Não informado]')}")
@@ -144,8 +117,6 @@ def gerar_documento_docx(info, enderecos):
                 doc.add_paragraph(f"Estado: {endereco.get('estado', '[Não informado]')}")
                 doc.add_paragraph(f"CEP: {endereco.get('cep', '[Não informado]')}")
                 doc.add_paragraph("\n")
-        else:
-            doc.add_paragraph("Nenhum endereço encontrado.")
 
         # Corpo principal
             # Corpo principal
@@ -195,19 +166,11 @@ def gerar_documento_docx(info, enderecos):
         doc.add_paragraph(f"Por fim, esclarecemos que foi concedido aos autos ao usuário: {advogado_nome} – E-mail: {advogado_email}")
         doc.add_paragraph("Atenciosamente,", style='IntenseQuote')
 
-        # Salvar documento
         doc.save(output_path)
         return output_path
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
         return None
-
-        
-        # Salva o documento
-        doc.save(output_path)
-        print(f"Documento gerado com sucesso: {output_path}")
-    except Exception as e:
-        print(f"Erro ao gerar o documento DOCX: {e}")
 
 # Interface do Streamlit
 st.title("Gerador de Documentos - Processos Administrativos")
@@ -227,23 +190,16 @@ if uploaded_file:
             st.write("Informações extraídas:", info)
             st.write("Endereços extraídos:", enderecos)
 
-            # Validar se as informações e os endereços foram extraídos corretamente
-            if not isinstance(info, dict) or not info:
-                st.error("Erro: Informações do documento não foram extraídas corretamente.")
-            elif not isinstance(enderecos, list) or not enderecos:
-                st.error("Erro: Nenhum endereço foi extraído do documento.")
-            else:
-                try:
-                    # Chamada correta com os dois argumentos
-                    output_path = gerar_documento_docx(info, enderecos)
-                    if output_path:
-                        with open(output_path, "rb") as file:
-                            st.download_button("Baixar Documento Gerado", file, file_name=output_path)
-                    else:
-                        st.error("Erro ao gerar o documento.")
-                except Exception as e:
-                    st.error(f"Erro ao gerar o documento: {e}")
+            try:
+                # Chamada correta com os dois argumentos
+                output_path = gerar_documento_docx(info, enderecos)
+                if output_path:
+                    with open(output_path, "rb") as file:
+                        st.download_button("Baixar Documento Gerado", file, file_name=output_path)
+                else:
+                    st.error("Erro ao gerar o documento.")
+            except Exception as e:
+                st.error(f"Erro ao gerar o documento: {e}")
         else:
             st.error("Nenhum texto foi extraído do arquivo.")
-
 
