@@ -7,6 +7,7 @@ from PyPDF2 import PdfReader
 from docx import Document
 from docx.shared import Pt
 
+
 # Funções Auxiliares
 def normalize_text(text):
     """
@@ -16,6 +17,7 @@ def normalize_text(text):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
     return re.sub(r"\s{2,}", " ", text).strip()
+
 
 def corrigir_texto(texto):
     """
@@ -31,6 +33,7 @@ def corrigir_texto(texto):
         texto = texto.replace(errado, correto)
     return texto
 
+
 def extract_text_with_pypdf2(pdf_file):
     """
     Extrai texto de PDFs usando PyPDF2.
@@ -45,6 +48,7 @@ def extract_text_with_pypdf2(pdf_file):
         st.error(f"Erro ao processar PDF: {e}")
         return ''
 
+
 def extract_information(text):
     """
     Extrai informações específicas do texto, como Nome do Autuado, CNPJ/CPF, Sócios/Advogados e E-mails.
@@ -53,6 +57,73 @@ def extract_information(text):
     cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
     socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
     email_pattern = r"(?:E-mail|Email):\s*([\w.-]+@[\w.-]+\.[a-z]{2,})"
+
+    return {
+        "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
+        "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
+        "socios_advogados": re.findall(socios_adv_pattern, text),
+        "emails": re.findall(email_pattern, text),
+    }
+
+
+def extract_addresses(text):
+    """
+    Extrai informações de endereço do texto usando expressões regulares.
+    """
+    endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
+    cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
+    bairro_pattern = r"Bairro:\s*([\w\s]+)"
+    estado_pattern = r"Estado:\s*([A-Z]{2})"
+    cep_pattern = r"CEP:\s*(\d{2}\.\d{3}-\d{3}|\d{5}-\d{3})"
+
+    endereco_matches = re.findall(endereco_pattern, text)
+    cidade_matches = re.findall(cidade_pattern, text)
+    bairro_matches = re.findall(bairro_pattern, text)
+    estado_matches = re.findall(estado_pattern, text)
+    cep_matches = re.findall(cep_pattern, text)
+
+    addresses = []
+    for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
+        address = {
+            "endereco": endereco_matches[i].strip() if i < len(endereco_matches) else None,
+            "cidade": cidade_matches[i].strip() if i < len(cidade_matches) else None,
+            "bairro": bairro_matches[i].strip() if i < len(bairro_matches) else None,
+            "estado": estado_matches[i].strip() if i < len(estado_matches) else None,
+            "cep": cep_matches[i].strip() if i < len(cep_matches) else None,
+        }
+        addresses.append(address)
+
+    return addresses
+
+
+def adicionar_paragrafo(doc, texto, negrito=False):
+    """
+    Adiciona um parágrafo ao documento.
+    """
+    paragrafo = doc.add_paragraph()
+    run = paragrafo.add_run(texto)
+    run.bold = negrito
+    run.font.size = Pt(12)
+
+
+def gerar_documento_docx(info, enderecos):
+    """
+    Gera um documento DOCX com informações do processo e endereços extraídos.
+
+    Args:
+        info (dict): Dicionário com informações extraídas do texto.
+        enderecos (list): Lista de dicionários contendo informações de endereços.
+
+    Returns:
+        str: Caminho do arquivo gerado.
+    """
+    try:
+        output_path = f"Notificacao_Processo_{info.get('nome_autuado', 'Desconhecido')}.docx"
+        doc = Document()
+
+        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
+        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+        doc.add_paragraph("\n")
 
     return {
         "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
