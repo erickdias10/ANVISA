@@ -194,15 +194,23 @@ if uploaded_file:
         # Extrair texto do PDF
         texto_extraido = extract_text_with_pypdf2(uploaded_file)
         if texto_extraido:
+            # Extração de informações e endereços
             info = extract_information(texto_extraido)
             enderecos = extract_addresses(texto_extraido)
 
-            # Gerar documento
-            output_path = gerar_documento_docx(info, enderecos)
-            if output_path:
-                with open(output_path, "rb") as file:
-                    st.download_button("Baixar Documento Gerado", file, file_name=output_path)
+            # Validação dos dados extraídos
+            if not info:
+                st.error("Erro ao extrair informações do PDF. Verifique o arquivo.")
+            elif not enderecos:
+                st.error("Nenhum endereço foi encontrado no PDF.")
             else:
-                st.error("Erro ao gerar o documento.")
+                # Gerar documento
+                output_path = gerar_documento_docx(info, enderecos)
+                if output_path:
+                    with open(output_path, "rb") as file:
+                        st.download_button("Baixar Documento Gerado", file, file_name=output_path)
+                else:
+                    st.error("Erro ao gerar o documento.")
         else:
             st.error("Nenhum texto foi extraído do arquivo.")
+
