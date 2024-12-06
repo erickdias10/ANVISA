@@ -5,57 +5,11 @@ import unicodedata
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
-import pyautogui
 import os
 import glob
 import time
 import joblib
 import streamlit as st
-
-# Bloco 2: Funções de Automação de Interface (PyAutoGUI)
-def move_and_click(x, y):
-    """
-    Move o cursor do mouse para as coordenadas especificadas e clica.
-
-    Args:
-        x (int): Coordenada X para mover o mouse.
-        y (int): Coordenada Y para mover o mouse.
-    """
-    try:
-        pyautogui.moveTo(x, y)
-        pyautogui.click()
-    except Exception as e:
-        print(f"Erro ao clicar nas coordenadas ({x}, {y}): {e}")
-
-def buscar_processo(processo):
-    """
-    Realiza a busca de um processo no sistema usando automação.
-
-    Args:
-        processo (str): Número do processo a ser buscado.
-    """
-    try:
-        time.sleep(2) #Aguarde o inicio
-        print("Buscando o processo...")
-        move_and_click(1465, 199)  # Coordenadas do campo de busca
-        pyautogui.write(processo)  # Digita o número do processo
-        pyautogui.press("enter")  # Pressiona Enter para buscar
-        time.sleep(10)  # Aguarda o carregamento
-    except Exception as e:
-        print(f"Erro ao buscar o processo: {e}")
-
-def baixar_processo():
-    """
-    Realiza o download do processo em formato PDF usando automação.
-    """
-    try:
-        print("Baixando o processo...")
-        move_and_click(1084, 256)  # Botão para gerar em PDF
-        time.sleep(10)  # Aguarda o carregamento do botão Gerar
-        move_and_click(1792, 288)  # Botão para confirmar geração
-        time.sleep(20)  # Aguarda o download do arquivo
-    except Exception as e:
-        print(f"Erro ao baixar o processo: {e}")
 
 def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_path="address_model.pkl"):
     """
