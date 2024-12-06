@@ -131,31 +131,40 @@ def gerar_documento_docx(info, enderecos):
     """
     try:
         # Verifica o número do processo
-        process_number = info.get("process_number", "0000")  # Use um número padrão se não for fornecido
+        process_number = info.get("process_number", "0000")  # Use um número padrão se não fornecido
 
         # Define o caminho de saída
-        diretorio_downloads = os.getcwd()  # Altere aqui se necessário
+        diretorio_downloads = os.getcwd()  # Altere para o diretório desejado
         output_path = os.path.join(diretorio_downloads, f"Notificacao_Processo_Nº_{process_number}.docx")
-        
+
         # Cria o documento
         doc = Document()
 
-        # Cabeçalho e informações
+        # Cabeçalho e informações do autuado
         doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
-        # Adiciona endereços
-        for endereco in enderecos:
-            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-            doc.add_paragraph("\n")
+        # Filtra endereços válidos
+        enderecos_validos = [
+            endereco for endereco in enderecos
+            if any(endereco.get(campo) != "[Não informado]" for campo in ["endereco", "cidade", "bairro", "estado", "cep"])
+        ]
 
-        # Texto principal do documento
+        if enderecos_validos:
+            adicionar_paragrafo(doc, "Endereços:")
+            for endereco in enderecos_validos:
+                adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
+                doc.add_paragraph("\n")
+        else:
+            adicionar_paragrafo(doc, "Nenhum endereço válido encontrado.")
+
+        # Corpo principal do documento
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
         adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {process_number}", negrito=True)
         doc.add_paragraph("\n")
@@ -167,44 +176,19 @@ def gerar_documento_docx(info, enderecos):
         # Informações sobre multa
         adicionar_paragrafo(doc, "O QUE FAZER SE A DECISÃO TIVER APLICADO MULTA?", negrito=True)
         adicionar_paragrafo(doc, "Sendo aplicada a penalidade de multa, esta notificação estará acompanhada de boleto bancário, que deverá ser pago até o vencimento.")
-        # (Demais textos permanecem conforme fornecidos)
+        adicionar_paragrafo(doc, "O valor da multa poderá ser pago com 20% de desconto caso seja efetuado em até 20 dias contados de seu recebimento. Incorrerá em ilegalidade o usufruto do desconto em data posterior ao prazo referido, mesmo que a data impressa no boleto permita pagamento.")
 
-        # Recursos e anexos
+        # Orientações para recursos
         adicionar_paragrafo(doc, "COMO FAÇO PARA INTERPOR RECURSO DA DECISÃO?", negrito=True)
         adicionar_paragrafo(doc, "Havendo interesse na interposição de recurso administrativo, este poderá ser interposto no prazo de 20 dias contados do recebimento desta notificação.")
-        # (Continue com o mesmo padrão)
 
-        # Salvar o documento
+        # Salvar o documento no caminho especificado
         doc.save(output_path)
         return output_path
     except Exception as e:
         st.error(f"Erro ao gerar o documento: {e}")
         return None
 
-
-        # Interface Streamlit
-        st.title("Gerador de Documentos - Processos Administrativos")
-        processo = st.text_input("Digite o número do processo:")
-
-        uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
-        
-        # Fechamento
-        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
-        advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
-        
-        advogado_email = info.get('emails', ["[E-mail não informado]"])
-        advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
-        
-        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
-        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
-
-        # Salva o documento no caminho especificado
-        doc.save(output_path)
-        st.success(f"Documento salvo com sucesso: {output_path}")
-        return output_path
-    except Exception as e:
-        st.error(f"Erro ao gerar o documento: {e}")
-        return None
 
 # Interface do Streamlit
 st.title("Gerador de Documentos - Processos Administrativos")
