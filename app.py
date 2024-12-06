@@ -130,25 +130,29 @@ def gerar_documento_docx(info, enderecos):
         str: Caminho do arquivo gerado.
     """
     try:
-        diretorio_downloads = os.path.expanduser("~/Downloads")
-        process_number = info.get("process_number", "0000")  # Certifique-se de definir este valor anteriormente
+        # Verifica o número do processo
+        process_number = info.get("process_number", "0000")  # Use um número padrão se não for fornecido
+
+        # Define o caminho de saída
+        diretorio_downloads = os.getcwd()  # Altere aqui se necessário
         output_path = os.path.join(diretorio_downloads, f"Notificacao_Processo_Nº_{process_number}.docx")
         
+        # Cria o documento
         doc = Document()
 
-        # Cabeçalho e informações do autuado
+        # Cabeçalho e informações
         doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
         # Adiciona endereços
-        for idx, endereco in enumerate(enderecos, start=1):
-            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco')}")
-            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade')}")
-            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro')}")
-            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado')}")
-            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep')}")
+        for endereco in enderecos:
+            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
 
         # Texto principal do documento
@@ -194,6 +198,13 @@ def gerar_documento_docx(info, enderecos):
         adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
 
+        # Salva o documento no caminho especificado
+        doc.save(output_path)
+        st.success(f"Documento salvo com sucesso: {output_path}")
+        return output_path
+    except Exception as e:
+        st.error(f"Erro ao gerar o documento: {e}")
+        return None
 
 # Interface do Streamlit
 st.title("Gerador de Documentos - Processos Administrativos")
