@@ -2,7 +2,6 @@
 import re
 from PyPDF2 import PdfReader
 import unicodedata
-from tkinter import Tk, filedialog
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
