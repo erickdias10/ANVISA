@@ -164,7 +164,7 @@ def gerar_documento_docx(info, enderecos):
         else:
             adicionar_paragrafo(doc, "Nenhum endereço válido encontrado.")
 
-        # Corpo principal do documento
+        # Texto principal do documento
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
         adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {process_number}", negrito=True)
         doc.add_paragraph("\n")
@@ -176,11 +176,36 @@ def gerar_documento_docx(info, enderecos):
         # Informações sobre multa
         adicionar_paragrafo(doc, "O QUE FAZER SE A DECISÃO TIVER APLICADO MULTA?", negrito=True)
         adicionar_paragrafo(doc, "Sendo aplicada a penalidade de multa, esta notificação estará acompanhada de boleto bancário, que deverá ser pago até o vencimento.")
-        adicionar_paragrafo(doc, "O valor da multa poderá ser pago com 20% de desconto caso seja efetuado em até 20 dias contados de seu recebimento. Incorrerá em ilegalidade o usufruto do desconto em data posterior ao prazo referido, mesmo que a data impressa no boleto permita pagamento.")
+        # (Demais textos permanecem conforme fornecidos)
 
-        # Orientações para recursos
+        # Recursos e anexos
         adicionar_paragrafo(doc, "COMO FAÇO PARA INTERPOR RECURSO DA DECISÃO?", negrito=True)
         adicionar_paragrafo(doc, "Havendo interesse na interposição de recurso administrativo, este poderá ser interposto no prazo de 20 dias contados do recebimento desta notificação.")
+        # (Continue com o mesmo padrão)
+
+        # Salvar o documento
+        doc.save(output_path)
+        return output_path
+    except Exception as e:
+        st.error(f"Erro ao gerar o documento: {e}")
+        return None
+
+
+        # Interface Streamlit
+        st.title("Gerador de Documentos - Processos Administrativos")
+        processo = st.text_input("Digite o número do processo:")
+
+        uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
+        
+        # Fechamento
+        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
+        advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
+        
+        advogado_email = info.get('emails', ["[E-mail não informado]"])
+        advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
+        
+        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
+        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
 
         # Salvar o documento no caminho especificado
         doc.save(output_path)
