@@ -98,6 +98,32 @@ def extract_addresses(text):
 def gerar_documento_docx(info, enderecos):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
+
+    Args:
+        info (dict): Dicionário com informações extraídas do texto.
+        enderecos (list): Lista de dicionários contendo informações de endereços.
+
+    Returns:
+        str: Caminho do arquivo gerado.
+    """
+    try:
+        output_path = f"Notificacao_Processo_{info.get('nome_autuado', 'Desconhecido')}.docx"
+        doc = Document()
+
+        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
+        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+        doc.add_paragraph("\n")
+
+        if enderecos:
+            for endereco in enderecos:
+                adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
+                doc.add_paragraph("\n")
+
+    Gera um documento DOCX com informações do processo e endereços extraídos.
     """
     try:
         # Nome do arquivo de saída
