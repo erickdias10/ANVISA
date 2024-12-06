@@ -232,16 +232,17 @@ def gerar_documento_docx(info, enderecos):
         uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
         
         # Fechamento
-        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])[0]
+         advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])[0]
         advogado_email = info.get('emails', ["[E-mail não informado]"])[0]
-        doc.add_paragraph(f"Por fim, esclarecemos que foi concedido aos autos ao usuário: {advogado_nome} – E-mail: {advogado_email}")
-        doc.add_paragraph("Atenciosamente,", style='IntenseQuote')
+        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos ao usuário: {advogado_nome} – E-mail: {advogado_email}")
+        adicionar_paragrafo(doc, "Atenciosamente,")
 
         doc.save(output_path)
         return output_path
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
         return None
+
 
 # Interface do Streamlit
 st.title("Gerador de Documentos - Processos Administrativos")
