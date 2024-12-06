@@ -53,18 +53,21 @@ def extract_information(text):
     """
     Extrai informações específicas do texto, como Nome do Autuado, CNPJ/CPF, Sócios/Advogados e E-mails.
     """
-    autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
-    cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
-    socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
-    email_pattern = r"(?:E-mail|Email):\s*([\w.-]+@[\w.-]+\.[a-z]{2,})"
+    try:
+        autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
+        cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
+        socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
+        email_pattern = r"(?:E-mail|Email):\s*([\w.-]+@[\w.-]+\.[a-z]{2,})"
 
-    return {
-        "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
-        "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
-        "socios_advogados": re.findall(socios_adv_pattern, text),
-        "emails": re.findall(email_pattern, text),
-    }
-
+        return {
+            "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
+            "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
+            "socios_advogados": re.findall(socios_adv_pattern, text),
+            "emails": re.findall(email_pattern, text),
+        }
+    except Exception as e:
+        st.error(f"Erro ao extrair informações do texto: {e}")
+        return {}
 
 def extract_addresses(text):
     """
