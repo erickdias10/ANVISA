@@ -2,8 +2,6 @@
 import os
 import re
 import unicodedata
-import glob
-import joblib
 import streamlit as st
 from PyPDF2 import PdfReader
 from docx import Document
@@ -188,11 +186,10 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
 
 # Interface do Streamlit
 st.title("Gerador de Documentos - Processos Administrativos")
-processo = st.text_input("Digite o número do processo:")
 
 uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
 
-if uploaded_file and processo:
+if uploaded_file:
     with st.spinner("Processando o arquivo..."):
         # Extrair texto do PDF
         texto_extraido = extract_text_with_pypdf2(uploaded_file)
@@ -201,7 +198,7 @@ if uploaded_file and processo:
             enderecos = extract_addresses(texto_extraido)
 
             # Gerar documento
-            output_path = gerar_documento_docx(processo, info, enderecos)
+            output_path = gerar_documento_docx(info, enderecos)
             if output_path:
                 with open(output_path, "rb") as file:
                     st.download_button("Baixar Documento Gerado", file, file_name=output_path)
