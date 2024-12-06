@@ -219,12 +219,27 @@ if uploaded_file:
             enderecos = extract_addresses(texto_extraido)
             if info and enderecos:
                 st.success("Informações extraídas com sucesso!")
+                
                 # Exibir resultados na interface
                 st.write("Informações Extraídas:")
                 st.write(info)
                 st.write("Endereços Extraídos:")
                 st.write(enderecos)
+
+                # Gerar documento DOCX
+                output_path = gerar_documento_docx(info, enderecos)
+                if output_path:
+                    with open(output_path, "rb") as file:
+                        st.download_button(
+                            label="Baixar Documento Gerado",
+                            data=file,
+                            file_name=os.path.basename(output_path),
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                else:
+                    st.error("Erro ao gerar o documento.")
             else:
                 st.error("Informações ou endereços não extraídos corretamente.")
         else:
             st.error("Nenhum texto foi extraído do arquivo.")
+
