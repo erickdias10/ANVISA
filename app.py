@@ -95,35 +95,31 @@ def extract_addresses(text):
 
     return addresses
 
-def gerar_documento_docx(process_number, info, enderecos, output_path="Notificacao_Processo_Nº_{process_number}.docx"):
+def gerar_documento_docx(info, enderecos):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
-
-    Args:
-        process_number (str): Número do processo administrativo.
-        info (dict): Dicionário com informações extraídas do texto.
-        enderecos (list): Lista de dicionários contendo informações de endereços.
-        output_path (str): Caminho para salvar o documento gerado.
     """
     try:
-        diretorio_downloads = os.path.expanduser("~/Downloads")
-        output_path = os.path.join(diretorio_downloads, f"Notificacao_Processo_Nº_{process_number}.docx")
-        
+        # Nome do arquivo de saída
+        output_path = f"Notificacao_Processo_{info.get('nome_autuado', 'Desconhecido')}.docx"
         doc = Document()
 
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+        # Adiciona informações do autuado
+        doc.add_paragraph(f"[Ao Senhor/À Senhora]")
+        doc.add_paragraph(f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
         # Adiciona endereços
-        for idx, endereco in enumerate(enderecos, start=1):
-            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-            doc.add_paragraph("\n")
+        if enderecos:
+            for endereco in enderecos:
+                doc.add_paragraph(f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+                doc.add_paragraph(f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+                doc.add_paragraph(f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+                doc.add_paragraph(f"Estado: {endereco.get('estado', '[Não informado]')}")
+                doc.add_paragraph(f"CEP: {endereco.get('cep', '[Não informado]')}")
+                doc.add_paragraph("\n")
+        else:
+            doc.add_paragraph("Nenhum endereço encontrado.")
 
         # Corpo principal
             # Corpo principal
@@ -168,14 +164,17 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
         uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
         
         # Fechamento
-        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
-        advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
-        
-        advogado_email = info.get('emails', ["[E-mail não informado]"])
-        advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
-        
-        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
-        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
+        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])[0]
+        advogado_email = info.get('emails', ["[E-mail não informado]"])[0]
+        doc.add_paragraph(f"Por fim, esclarecemos que foi concedido aos autos ao usuário: {advogado_nome} – E-mail: {advogado_email}")
+        doc.add_paragraph("Atenciosamente,", style='IntenseQuote')
+
+        # Salvar documento
+        doc.save(output_path)
+        return output_path
+    except Exception as e:
+        st.error(f"Erro ao gerar o documento DOCX: {e}")
+        return None
 
         
         # Salva o documento
@@ -198,18 +197,18 @@ if uploaded_file:
             info = extract_information(texto_extraido)
             enderecos = extract_addresses(texto_extraido)
 
-            # Validação dos dados extraídos
+            # Exibir informações extraídas para depuração
+            st.write("Informações extraídas:", info)
+            st.write("Endereços extraídos:", enderecos)
+
+            # Validar se as informações e os endereços foram extraídos corretamente
             if not isinstance(info, dict) or not info:
                 st.error("Erro: Informações do documento não foram extraídas corretamente.")
-            elif not isinstance(enderecos, list):
+            elif not isinstance(enderecos, list) or not enderecos:
                 st.error("Erro: Nenhum endereço foi extraído do documento.")
             else:
-                # Log para depuração
-                st.write("Informações extraídas:", info)
-                st.write("Endereços extraídos:", enderecos)
-
-                # Gerar documento
                 try:
+                    # Chamada correta com os dois argumentos
                     output_path = gerar_documento_docx(info, enderecos)
                     if output_path:
                         with open(output_path, "rb") as file:
