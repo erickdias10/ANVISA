@@ -198,16 +198,16 @@ if uploaded_file:
             info = extract_information(texto_extraido)
             enderecos = extract_addresses(texto_extraido)
 
-            # Log para depuração
-            st.write("Informações extraídas:", info)
-            st.write("Endereços extraídos:", enderecos)
-
-            # Validação
+            # Validação dos dados extraídos
             if not isinstance(info, dict) or not info:
                 st.error("Erro: Informações do documento não foram extraídas corretamente.")
-            elif not isinstance(enderecos, list) or not enderecos:
+            elif not isinstance(enderecos, list):
                 st.error("Erro: Nenhum endereço foi extraído do documento.")
             else:
+                # Log para depuração
+                st.write("Informações extraídas:", info)
+                st.write("Endereços extraídos:", enderecos)
+
                 # Gerar documento
                 try:
                     output_path = gerar_documento_docx(info, enderecos)
