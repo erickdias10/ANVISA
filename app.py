@@ -111,13 +111,17 @@ def gerar_documento_docx(process_number, enderecos, output_path="Notificacao_Pro
         adicionar_paragrafo(doc, "NOME AUTUADO – CNPJ/CPF: [XXXXX]")
         doc.add_paragraph("\n")
 
-        for idx, endereco in enumerate(enderecos, start=1):
-            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-            doc.add_paragraph("\n")
+        # Verifica se endereços estão no formato correto
+        if isinstance(enderecos, list) and all(isinstance(endereco, dict) for endereco in enderecos):
+            for idx, endereco in enumerate(enderecos, start=1):
+                adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
+                doc.add_paragraph("\n")
+        else:
+            adicionar_paragrafo(doc, "Nenhum endereço encontrado ou formato incorreto.")
 
         # Corpo principal do texto
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
@@ -141,10 +145,11 @@ def main():
             texto_extraido = extract_text_with_pypdf2(uploaded_file)
             if texto_extraido:
                 process_number = "12345"  # Número de processo (exemplo)
+                enderecos = extract_addresses(texto_extraido)
                 output_path = f"Notificacao_Processo_{process_number}.docx"
 
                 # Gera o documento no diretório atual
-                gerar_documento_docx(process_number, texto_extraido, output_path)
+                gerar_documento_docx(process_number, enderecos, output_path)
             else:
                 st.error("Nenhum texto foi extraído do PDF.")
     else:
