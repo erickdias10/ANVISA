@@ -49,7 +49,17 @@ def extract_text_with_pypdf2(pdf_file):
         return ''
 
 
-# Corrigindo problemas de indentação e mantendo o código intacto
+def extract_information(text):
+    """
+    Extrai informações relevantes do texto processado.
+    Este é um placeholder que deve ser substituído por lógica personalizada.
+    """
+    # Exemplo básico para evitar erros. Adicione lógica real conforme necessário.
+    if not text:
+        return None
+    return {"texto_bruto": text[:200]}  # Retorna os primeiros 200 caracteres como exemplo.
+
+
 def gerar_documento_docx(info, enderecos):
     try:
         doc = Document()
@@ -78,10 +88,13 @@ def gerar_documento_docx(info, enderecos):
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
 
         # Salva o documento
+        output_path = "output.docx"  # Adicionado para evitar erro de variável indefinida
         doc.save(output_path)
         print(f"Documento gerado com sucesso: {output_path}")
+        return output_path
     except Exception as e:
         print(f"Erro ao gerar o documento DOCX: {e}")
+        return None
 
 
 # Interface do Streamlit
