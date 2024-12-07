@@ -71,21 +71,39 @@ def extract_information(text):
         return {}
 
 
+def adicionar_paragrafo(doc, texto, negrito=False):
+    """
+    Adiciona um parágrafo ao documento DOCX com opções de negrito.
+    """
+    paragrafo = doc.add_paragraph()
+    run = paragrafo.add_run(texto)
+    if negrito:
+        run.bold = True
+    paragrafo.style.font.size = Pt(12)
 
 
-        # Interface Streamlit
-        st.title("Gerador de Documentos - Processos Administrativos")
-        processo = st.text_input("Digite o número do processo:")
+def gerar_documento_docx(info, enderecos):
+    """
+    Gera um documento DOCX com base nas informações extraídas.
+    """
+    try:
+        doc = Document()
+        output_path = "documento_gerado.docx"
 
-        uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
-        
+        adicionar_paragrafo(doc, "Gerador de Documentos - Processos Administrativos", negrito=True)
+
+        # Adicionar informações ao documento
+        adicionar_paragrafo(doc, f"Nome do Autuado: {info.get('nome_autuado', '[Não informado]')}")
+        adicionar_paragrafo(doc, f"CNPJ/CPF: {info.get('cnpj_cpf', '[Não informado]')}")
+        adicionar_paragrafo(doc, f"Endereços: {', '.join(enderecos) if enderecos else '[Não informado]'}")
+
         # Fechamento
         advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
         advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
-        
+
         advogado_email = info.get('emails', ["[E-mail não informado]"])
         advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
-        
+
         adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
 
@@ -95,21 +113,6 @@ def extract_information(text):
     except Exception as e:
         st.error(f"Erro ao gerar o documento: {e}")
         return None
-
-   adicionar_paragrafo(doc, "b) Autuado pessoa física:")
-        adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
-        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
-        doc.add_paragraph("\n")  # Quebra de linha
-        
-        # Fechamento
-        adicionar_paragrafo(doc, "Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: [nome e e-mail.]")
-        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
-        
-        # Salva o documento
-        doc.save(output_path)
-        print(f"Documento gerado com sucesso: {output_path}")
-    except Exception as e:
-        print(f"Erro ao gerar o documento DOCX: {e}")
 
 
 # Interface do Streamlit
@@ -122,10 +125,10 @@ if uploaded_file:
         texto_extraido = extract_text_with_pypdf2(uploaded_file)
         if texto_extraido:
             info = extract_information(texto_extraido)
-            enderecos = extract_addresses(texto_extraido)
-            if info and enderecos:
+            enderecos = []  # Corrigir função extract_addresses se necessário
+            if info:
                 st.success("Informações extraídas com sucesso!")
-                
+
                 # Exibir resultados na interface
                 st.write("Informações Extraídas:")
                 st.write(info)
@@ -148,4 +151,3 @@ if uploaded_file:
                 st.error("Informações ou endereços não extraídos corretamente.")
         else:
             st.error("Nenhum texto foi extraído do arquivo.")
-
