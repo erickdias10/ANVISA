@@ -1,27 +1,13 @@
 # Bloco 1: Importação de Bibliotecas
 import re
 import os
-import glob
 import unicodedata
-from tkinter import Tk, filedialog
 from docx import Document
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
 from PyPDF2 import PdfReader
+import streamlit as st
 
 # Bloco 2: Funções de Manipulação de Arquivos e Extração de Texto
-def buscar_arquivo():
-    """
-    Abre um seletor de arquivos para o usuário escolher o PDF.
-    """
-    Tk().withdraw()  # Oculta a janela principal do Tkinter
-    arquivo = filedialog.askopenfilename(filetypes=[("Arquivos PDF", "*.pdf")])
-    if not arquivo:
-        print("Nenhum arquivo selecionado.")
-        return None
-    print(f"Arquivo selecionado: {arquivo}")
-    return arquivo
-
 def normalize_text(text):
     """
     Remove caracteres especiais e normaliza o texto.
@@ -46,19 +32,19 @@ def corrigir_texto(texto):
         texto = texto.replace(errado, correto)
     return texto
 
-def extract_text_with_pypdf2(pdf_path):
+def extract_text_with_pypdf2(pdf_file):
     """
     Extrai texto de PDFs usando PyPDF2.
     """
     try:
-        reader = PdfReader(pdf_path)
+        reader = PdfReader(pdf_file)
         text = ""
         for page in reader.pages:
             text += page.extract_text() or ""
         text = corrigir_texto(normalize_text(text))
         return text.strip()
     except Exception as e:
-        print(f"Erro ao processar PDF com PyPDF2 {pdf_path}: {e}")
+        st.error(f"Erro ao processar PDF: {e}")
         return ''
 
 # Bloco 3: Processamento de Endereços e Formatação do Documento
@@ -138,27 +124,30 @@ def gerar_documento_docx(process_number, enderecos, output_path="Notificacao_Pro
         adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {process_number}", negrito=True)
         adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
         adicionar_paragrafo(doc, "Informamos que foi proferido julgamento pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias no processo administrativo sancionador em referência, conforme decisão em anexo.")
-        # TODO: Adicionar os demais textos conforme necessário (mantendo os textos originais fornecidos).
 
         # Salva o documento
         doc.save(output_path)
-        print(f"Documento gerado com sucesso: {output_path}")
+        st.success(f"Documento gerado com sucesso: {output_path}")
     except Exception as e:
-        print(f"Erro ao gerar o documento DOCX: {e}")
+        st.error(f"Erro ao gerar o documento DOCX: {e}")
 
-# Bloco 4: Função Principal
+# Bloco 4: Interface com Streamlit
 def main():
-    pdf_path = buscar_arquivo()
-    if pdf_path:
-        texto_extraido = extract_text_with_pypdf2(pdf_path)
-        if texto_extraido:
-            process_number = "12345"  # Exemplo de número de processo, pode ser adaptado
-            enderecos = extract_addresses(texto_extraido)
-            gerar_documento_docx(process_number, enderecos)
-        else:
-            print("Nenhum texto foi extraído do PDF.")
+    st.title("Gerador de Documentos - Processos Administrativos")
+
+    uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
+    if uploaded_file:
+        with st.spinner("Processando o arquivo..."):
+            texto_extraido = extract_text_with_pypdf2(uploaded_file)
+            if texto_extraido:
+                process_number = "12345"  # Exemplo de número de processo
+                enderecos = extract_addresses(texto_extraido)
+                output_path = f"Notificacao_Processo_{process_number}.docx"
+                gerar_documento_docx(process_number, enderecos, output_path)
+            else:
+                st.error("Nenhum texto foi extraído do PDF.")
     else:
-        print("Nenhum arquivo foi selecionado.")
+        st.info("Envie um arquivo PDF para começar.")
 
 if __name__ == "__main__":
     main()
