@@ -131,7 +131,7 @@ def gerar_documento_docx(process_number, enderecos, output_path="Notificacao_Pro
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
 
-# Bloco 4: Interface com Streamlit
+# Interface Streamlit
 def main():
     st.title("Gerador de Documentos - Processos Administrativos")
 
@@ -140,10 +140,11 @@ def main():
         with st.spinner("Processando o arquivo..."):
             texto_extraido = extract_text_with_pypdf2(uploaded_file)
             if texto_extraido:
-                process_number = "12345"  # Exemplo de número de processo
-                enderecos = extract_addresses(texto_extraido)
+                process_number = "12345"  # Número de processo (exemplo)
                 output_path = f"Notificacao_Processo_{process_number}.docx"
-                gerar_documento_docx(process_number, enderecos, output_path)
+
+                # Gera o documento no diretório atual
+                gerar_documento_docx(process_number, texto_extraido, output_path)
             else:
                 st.error("Nenhum texto foi extraído do PDF.")
     else:
