@@ -49,9 +49,18 @@ def extract_text_with_pypdf2(pdf_file):
         return ''
 
 
-  adicionar_paragrafo(doc, "O protocolo do recurso deverá ser feito exclusivamente, por meio de peticionamento intercorrente no processo indicado no campo assunto desta notificação, pelo Sistema Eletrônico de Informações (SEI). Para tanto, é necessário, primeiramente, fazer o cadastro como usuário externo SEI-Anvisa. Acesse o portal da Anvisa https://www.gov.br/anvisa/pt-br > Sistemas > SEI > Acesso para Usuários Externos (SEI) e siga as orientações. Para maiores informações, consulte o Manual do Usuário Externo Sei-Anvisa, que está disponível em https://www.gov.br/anvisa/pt-br/sistemas/sei.")
+# Corrigindo problemas de indentação e mantendo o código intacto
+def gerar_documento_docx(info, enderecos):
+    try:
+        doc = Document()
+
+        # Adicionando parágrafos
+        adicionar_paragrafo(
+            doc,
+            "O protocolo do recurso deverá ser feito exclusivamente, por meio de peticionamento intercorrente no processo indicado no campo assunto desta notificação, pelo Sistema Eletrônico de Informações (SEI). Para tanto, é necessário, primeiramente, fazer o cadastro como usuário externo SEI-Anvisa. Acesse o portal da Anvisa https://www.gov.br/anvisa/pt-br > Sistemas > SEI > Acesso para Usuários Externos (SEI) e siga as orientações. Para maiores informações, consulte o Manual do Usuário Externo Sei-Anvisa, que está disponível em https://www.gov.br/anvisa/pt-br/sistemas/sei."
+        )
         doc.add_paragraph("\n")  # Quebra de linha
-        
+
         # Quais documentos devem acompanhar o recurso
         adicionar_paragrafo(doc, "QUAIS DOCUMENTOS DEVEM ACOMPANHAR O RECURSO?", negrito=True)
         adicionar_paragrafo(doc, "a) Autuado pessoa jurídica:")
@@ -63,17 +72,16 @@ def extract_text_with_pypdf2(pdf_file):
         adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
         adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
         doc.add_paragraph("\n")  # Quebra de linha
-        
+
         # Fechamento
         adicionar_paragrafo(doc, "Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: [nome e e-mail.]")
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
-        
+
         # Salva o documento
         doc.save(output_path)
         print(f"Documento gerado com sucesso: {output_path}")
     except Exception as e:
         print(f"Erro ao gerar o documento DOCX: {e}")
-
 
 
 # Interface do Streamlit
