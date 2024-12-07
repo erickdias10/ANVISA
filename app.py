@@ -49,70 +49,31 @@ def extract_text_with_pypdf2(pdf_file):
         return ''
 
 
-def extract_information(text):
-    """
-    Extrai informações específicas do texto.
-    """
-    try:
-        autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
-        cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
-        socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
-        email_pattern = r"(?:E-mail|Email):\s*([\w.-]+@[\w.-]+\.[a-z]{2,})"
-
-        info = {
-            "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
-            "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
-            "socios_advogados": re.findall(socios_adv_pattern, text),
-            "emails": re.findall(email_pattern, text),
-        }
-        return info
-    except Exception as e:
-        st.error(f"Erro ao extrair informações do texto: {e}")
-        return {}
-
-
-def adicionar_paragrafo(doc, texto, negrito=False):
-    """
-    Adiciona um parágrafo ao documento DOCX com opções de negrito.
-    """
-    paragrafo = doc.add_paragraph()
-    run = paragrafo.add_run(texto)
-    if negrito:
-        run.bold = True
-    paragrafo.style.font.size = Pt(12)
-
-
-def gerar_documento_docx(info, enderecos):
-    """
-    Gera um documento DOCX com base nas informações extraídas.
-    """
-    try:
-        doc = Document()
-        output_path = "documento_gerado.docx"
-
-        adicionar_paragrafo(doc, "Gerador de Documentos - Processos Administrativos", negrito=True)
-
-        # Adicionar informações ao documento
-        adicionar_paragrafo(doc, f"Nome do Autuado: {info.get('nome_autuado', '[Não informado]')}")
-        adicionar_paragrafo(doc, f"CNPJ/CPF: {info.get('cnpj_cpf', '[Não informado]')}")
-        adicionar_paragrafo(doc, f"Endereços: {', '.join(enderecos) if enderecos else '[Não informado]'}")
-
+  adicionar_paragrafo(doc, "O protocolo do recurso deverá ser feito exclusivamente, por meio de peticionamento intercorrente no processo indicado no campo assunto desta notificação, pelo Sistema Eletrônico de Informações (SEI). Para tanto, é necessário, primeiramente, fazer o cadastro como usuário externo SEI-Anvisa. Acesse o portal da Anvisa https://www.gov.br/anvisa/pt-br > Sistemas > SEI > Acesso para Usuários Externos (SEI) e siga as orientações. Para maiores informações, consulte o Manual do Usuário Externo Sei-Anvisa, que está disponível em https://www.gov.br/anvisa/pt-br/sistemas/sei.")
+        doc.add_paragraph("\n")  # Quebra de linha
+        
+        # Quais documentos devem acompanhar o recurso
+        adicionar_paragrafo(doc, "QUAIS DOCUMENTOS DEVEM ACOMPANHAR O RECURSO?", negrito=True)
+        adicionar_paragrafo(doc, "a) Autuado pessoa jurídica:")
+        adicionar_paragrafo(doc, "1. Contrato ou estatuto social da empresa, com a última alteração;")
+        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo. Somente serão aceitas procurações e substabelecimentos assinados eletronicamente, com certificação digital no padrão da Infraestrutura de Chaves Públicas Brasileira (ICP-Brasil) ou pelo assinador Gov.br.")
+        adicionar_paragrafo(doc, "3. Ata de eleição da atual diretoria quando a procuração estiver assinada por diretor que não conste como sócio da empresa;")
+        adicionar_paragrafo(doc, "4. No caso de contestação sobre o porte da empresa considerado para a dosimetria da pena de multa: comprovação do porte econômico referente ao ano em que foi proferida a decisão (documentos previstos no art. 50 da RDC nº 222/2006).")
+        adicionar_paragrafo(doc, "b) Autuado pessoa física:")
+        adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
+        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
+        doc.add_paragraph("\n")  # Quebra de linha
+        
         # Fechamento
-        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
-        advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
-
-        advogado_email = info.get('emails', ["[E-mail não informado]"])
-        advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
-
-        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
+        adicionar_paragrafo(doc, "Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: [nome e e-mail.]")
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
-
-        # Salvar o documento no caminho especificado
+        
+        # Salva o documento
         doc.save(output_path)
-        return output_path
+        print(f"Documento gerado com sucesso: {output_path}")
     except Exception as e:
-        st.error(f"Erro ao gerar o documento: {e}")
-        return None
+        print(f"Erro ao gerar o documento DOCX: {e}")
+
 
 
 # Interface do Streamlit
