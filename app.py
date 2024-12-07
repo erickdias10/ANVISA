@@ -1,14 +1,27 @@
 # Bloco 1: Importação de Bibliotecas
-import os
 import re
+import os
+import glob
 import unicodedata
-import streamlit as st
-from PyPDF2 import PdfReader
+from tkinter import Tk, filedialog
 from docx import Document
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
+from PyPDF2 import PdfReader
 
+# Bloco 2: Funções de Manipulação de Arquivos e Extração de Texto
+def buscar_arquivo():
+    """
+    Abre um seletor de arquivos para o usuário escolher o PDF.
+    """
+    Tk().withdraw()  # Oculta a janela principal do Tkinter
+    arquivo = filedialog.askopenfilename(filetypes=[("Arquivos PDF", "*.pdf")])
+    if not arquivo:
+        print("Nenhum arquivo selecionado.")
+        return None
+    print(f"Arquivo selecionado: {arquivo}")
+    return arquivo
 
-# Funções Auxiliares
 def normalize_text(text):
     """
     Remove caracteres especiais e normaliza o texto.
@@ -16,8 +29,8 @@ def normalize_text(text):
     if not isinstance(text, str):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    return re.sub(r"\s{2,}", " ", text).strip()
-
+    text = re.sub(r"\s{2,}", " ", text)  # Remove múltiplos espaços
+    return text.strip()
 
 def corrigir_texto(texto):
     """
@@ -33,111 +46,119 @@ def corrigir_texto(texto):
         texto = texto.replace(errado, correto)
     return texto
 
-
-def extract_text_with_pypdf2(pdf_file):
+def extract_text_with_pypdf2(pdf_path):
     """
     Extrai texto de PDFs usando PyPDF2.
     """
     try:
-        reader = PdfReader(pdf_file)
+        reader = PdfReader(pdf_path)
         text = ""
         for page in reader.pages:
             text += page.extract_text() or ""
-        return corrigir_texto(normalize_text(text))
+        text = corrigir_texto(normalize_text(text))
+        return text.strip()
     except Exception as e:
-        st.error(f"Erro ao processar PDF: {e}")
+        print(f"Erro ao processar PDF com PyPDF2 {pdf_path}: {e}")
         return ''
 
-
-def extract_information(text):
+# Bloco 3: Processamento de Endereços e Formatação do Documento
+def extract_addresses(text):
     """
-    Extrai informações relevantes do texto processado.
-    Este é um placeholder que deve ser substituído por lógica personalizada.
-    """
-    if not text:
-        return None
-    return {"texto_bruto": text[:200]}  # Exemplo básico
+    Extrai informações de endereço do texto usando expressões regulares.
 
+    Args:
+        text (str): Texto extraído do PDF.
 
-def adicionar_paragrafo(doc, texto, negrito=False):
+    Returns:
+        list: Lista de dicionários contendo os endereços extraídos.
     """
-    Adiciona um parágrafo ao documento.
+    addresses = []
+    endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
+    cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
+    bairro_pattern = r"Bairro:\s*([\w\s]+)"
+    estado_pattern = r"Estado:\s*([A-Z]{2})"
+    cep_pattern = r"CEP:\s*(\d{2}\.\d{3}-\d{3}|\d{5}-\d{3})"
+
+    endereco_matches = re.findall(endereco_pattern, text)
+    cidade_matches = re.findall(cidade_pattern, text)
+    bairro_matches = re.findall(bairro_pattern, text)
+    estado_matches = re.findall(estado_pattern, text)
+    cep_matches = re.findall(cep_pattern, text)
+
+    for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
+        address = {
+            "endereco": endereco_matches[i].strip() if i < len(endereco_matches) else None,
+            "cidade": cidade_matches[i].strip() if i < len(cidade_matches) else None,
+            "bairro": bairro_matches[i].strip() if i < len(bairro_matches) else None,
+            "estado": estado_matches[i].strip() if i < len(estado_matches) else None,
+            "cep": cep_matches[i].strip() if i < len(cep_matches) else None
+        }
+        if any(address.values()) and address not in addresses:
+            addresses.append(address)
+
+    return addresses
+
+def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
+    """
+    Adiciona um parágrafo ao documento com texto opcionalmente em negrito e com tamanho de fonte ajustável.
     """
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
     run.bold = negrito
+    run.font.size = Pt(tamanho)
+    return paragrafo
 
+def gerar_documento_docx(process_number, enderecos, output_path="Notificacao_Processo.docx"):
+    """
+    Gera um documento DOCX com informações do processo e endereços extraídos.
 
-def gerar_documento_docx(info, enderecos):
+    Args:
+        process_number (str): Número do processo administrativo.
+        enderecos (list): Lista de dicionários contendo informações de endereços.
+        output_path (str): Caminho para salvar o documento gerado.
+    """
     try:
-        output_path = "documento_gerado.docx"  # Define o caminho do arquivo de saída
         doc = Document()
 
-        # Adicionando parágrafos
-        adicionar_paragrafo(
-            doc,
-            "O protocolo do recurso deverá ser feito exclusivamente, por meio de peticionamento intercorrente no processo indicado no campo assunto desta notificação, pelo Sistema Eletrônico de Informações (SEI). Para tanto, é necessário, primeiramente, fazer o cadastro como usuário externo SEI-Anvisa. Acesse o portal da Anvisa https://www.gov.br/anvisa/pt-br > Sistemas > SEI > Acesso para Usuários Externos (SEI) e siga as orientações. Para maiores informações, consulte o Manual do Usuário Externo Sei-Anvisa, que está disponível em https://www.gov.br/anvisa/pt-br/sistemas/sei."
-        )
-        doc.add_paragraph("\n")  # Quebra de linha
+        # Adiciona informações do processo e endereços
+        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
+        adicionar_paragrafo(doc, "NOME AUTUADO – CNPJ/CPF: [XXXXX]")
+        doc.add_paragraph("\n")
 
-        # Quais documentos devem acompanhar o recurso
-        adicionar_paragrafo(doc, "QUAIS DOCUMENTOS DEVEM ACOMPANHAR O RECURSO?", negrito=True)
-        adicionar_paragrafo(doc, "a) Autuado pessoa jurídica:")
-        adicionar_paragrafo(doc, "1. Contrato ou estatuto social da empresa, com a última alteração;")
-        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo. Somente serão aceitas procurações e substabelecimentos assinados eletronicamente, com certificação digital no padrão da Infraestrutura de Chaves Públicas Brasileira (ICP-Brasil) ou pelo assinador Gov.br.")
-        adicionar_paragrafo(doc, "3. Ata de eleição da atual diretoria quando a procuração estiver assinada por diretor que não conste como sócio da empresa;")
-        adicionar_paragrafo(doc, "4. No caso de contestação sobre o porte da empresa considerado para a dosimetria da pena de multa: comprovação do porte econômico referente ao ano em que foi proferida a decisão (documentos previstos no art. 50 da RDC nº 222/2006).")
-        adicionar_paragrafo(doc, "b) Autuado pessoa física:")
-        adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
-        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
-        doc.add_paragraph("\n")  # Quebra de linha
+        for idx, endereco in enumerate(enderecos, start=1):
+            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
+            doc.add_paragraph("\n")
 
-        # Fechamento
-        adicionar_paragrafo(doc, "Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: [nome e e-mail.]")
-        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
+        # Corpo principal do texto
+        adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
+        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {process_number}", negrito=True)
+        adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
+        adicionar_paragrafo(doc, "Informamos que foi proferido julgamento pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias no processo administrativo sancionador em referência, conforme decisão em anexo.")
+        # TODO: Adicionar os demais textos conforme necessário (mantendo os textos originais fornecidos).
 
-        # Salvar o documento
+        # Salva o documento
         doc.save(output_path)
         print(f"Documento gerado com sucesso: {output_path}")
-        return output_path
     except Exception as e:
         print(f"Erro ao gerar o documento DOCX: {e}")
-        return None
 
-
-# Interface do Streamlit
-st.title("Gerador de Documentos - Processos Administrativos")
-
-uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
-
-if uploaded_file:
-    with st.spinner("Processando o arquivo..."):
-        texto_extraido = extract_text_with_pypdf2(uploaded_file)
+# Bloco 4: Função Principal
+def main():
+    pdf_path = buscar_arquivo()
+    if pdf_path:
+        texto_extraido = extract_text_with_pypdf2(pdf_path)
         if texto_extraido:
-            info = extract_information(texto_extraido)
-            enderecos = []  # Corrigir função extract_addresses se necessário
-            if info:
-                st.success("Informações extraídas com sucesso!")
-
-                # Exibir resultados na interface
-                st.write("Informações Extraídas:")
-                st.write(info)
-                st.write("Endereços Extraídos:")
-                st.write(enderecos)
-
-                # Gerar documento DOCX
-                output_path = gerar_documento_docx(info, enderecos)
-                if output_path:
-                    with open(output_path, "rb") as file:
-                        st.download_button(
-                            label="Baixar Documento Gerado",
-                            data=file,
-                            file_name=os.path.basename(output_path),
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
-                else:
-                    st.error("Erro ao gerar o documento.")
-            else:
-                st.error("Informações ou endereços não extraídos corretamente.")
+            process_number = "12345"  # Exemplo de número de processo, pode ser adaptado
+            enderecos = extract_addresses(texto_extraido)
+            gerar_documento_docx(process_number, enderecos)
         else:
-            st.error("Nenhum texto foi extraído do arquivo.")
+            print("Nenhum texto foi extraído do PDF.")
+    else:
+        print("Nenhum arquivo foi selecionado.")
+
+if __name__ == "__main__":
+    main()
