@@ -54,14 +54,23 @@ def extract_information(text):
     Extrai informações relevantes do texto processado.
     Este é um placeholder que deve ser substituído por lógica personalizada.
     """
-    # Exemplo básico para evitar erros. Adicione lógica real conforme necessário.
     if not text:
         return None
-    return {"texto_bruto": text[:200]}  # Retorna os primeiros 200 caracteres como exemplo.
+    return {"texto_bruto": text[:200]}  # Exemplo básico
+
+
+def adicionar_paragrafo(doc, texto, negrito=False):
+    """
+    Adiciona um parágrafo ao documento.
+    """
+    paragrafo = doc.add_paragraph()
+    run = paragrafo.add_run(texto)
+    run.bold = negrito
 
 
 def gerar_documento_docx(info, enderecos):
     try:
+        output_path = "documento_gerado.docx"  # Define o caminho do arquivo de saída
         doc = Document()
 
         # Adicionando parágrafos
@@ -87,8 +96,7 @@ def gerar_documento_docx(info, enderecos):
         adicionar_paragrafo(doc, "Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: [nome e e-mail.]")
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
 
-        # Salva o documento
-        output_path = "output.docx"  # Adicionado para evitar erro de variável indefinida
+        # Salvar o documento
         doc.save(output_path)
         print(f"Documento gerado com sucesso: {output_path}")
         return output_path
