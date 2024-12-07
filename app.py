@@ -131,9 +131,10 @@ def gerar_documento_docx(process_number, enderecos, output_path="Notificacao_Pro
 
         # Salva o documento
         doc.save(output_path)
-        st.success(f"Documento gerado com sucesso: {output_path}")
+        return output_path
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
+        return None
 
 # Interface Streamlit
 def main():
@@ -149,7 +150,16 @@ def main():
                 output_path = f"Notificacao_Processo_{process_number}.docx"
 
                 # Gera o documento no diretório atual
-                gerar_documento_docx(process_number, enderecos, output_path)
+                file_path = gerar_documento_docx(process_number, enderecos, output_path)
+                if file_path:
+                    st.success(f"Documento gerado com sucesso em: {file_path}")
+                    with open(file_path, "rb") as file:
+                        st.download_button(
+                            label="Baixar Documento Gerado",
+                            data=file,
+                            file_name=os.path.basename(file_path),
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
             else:
                 st.error("Nenhum texto foi extraído do PDF.")
     else:
