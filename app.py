@@ -71,124 +71,6 @@ def extract_information(text):
         return {}
 
 
-def extract_addresses(text):
-    """
-    Extrai informações de endereço do texto usando expressões regulares.
-    """
-    try:
-        endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
-        cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
-        bairro_pattern = r"Bairro:\s*([\w\s]+)"
-        estado_pattern = r"Estado:\s*([A-Z]{2})"
-        cep_pattern = r"CEP:\s*(\d{2}\.\d{3}-\d{3}|\d{5}-\d{3})"
-
-        endereco_matches = re.findall(endereco_pattern, text)
-        cidade_matches = re.findall(cidade_pattern, text)
-        bairro_matches = re.findall(bairro_pattern, text)
-        estado_matches = re.findall(estado_pattern, text)
-        cep_matches = re.findall(cep_pattern, text)
-
-        addresses = []
-        for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
-            address = {
-                "endereco": endereco_matches[i].strip() if i < len(endereco_matches) else "[Não informado]",
-                "cidade": cidade_matches[i].strip() if i < len(cidade_matches) else "[Não informado]",
-                "bairro": bairro_matches[i].strip() if i < len(bairro_matches) else "[Não informado]",
-                "estado": estado_matches[i].strip() if i < len(estado_matches) else "[Não informado]",
-                "cep": cep_matches[i].strip() if i < len(cep_matches) else "[Não informado]",
-            }
-            addresses.append(address)
-
-        return addresses
-    except Exception as e:
-        st.error(f"Erro ao extrair endereços: {e}")
-        return []
-
-
-def adicionar_paragrafo(doc, texto, negrito=False):
-    """
-    Adiciona um parágrafo ao documento.
-    """
-    try:
-        paragrafo = doc.add_paragraph()
-        run = paragrafo.add_run(texto)
-        run.bold = negrito
-        run.font.size = Pt(12)
-    except Exception as e:
-        raise RuntimeError(f"Erro ao adicionar parágrafo: {e}")
-
-
-def gerar_documento_docx(info, enderecos):
-    """
-    Gera um documento DOCX com informações do processo e endereços extraídos.
-
-    Args:
-        info (dict): Dicionário com informações extraídas do texto.
-        enderecos (list): Lista de dicionários contendo informações de endereços.
-
-    Returns:
-        str: Caminho do arquivo gerado.
-    """
-    try:
-        # Verifica o número do processo
-        process_number = info.get("process_number", "0000")  # Use um número padrão se não fornecido
-
-        # Define o caminho de saída
-        diretorio_downloads = os.getcwd()  # Altere para o diretório desejado
-        output_path = os.path.join(diretorio_downloads, f"Notificacao_Processo_Nº_{process_number}.docx")
-
-        # Cria o documento
-        doc = Document()
-
-        # Cabeçalho e informações do autuado
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
-        doc.add_paragraph("\n")
-
-        # Filtra endereços válidos
-        enderecos_validos = [
-            endereco for endereco in enderecos
-            if any(endereco.get(campo) != "[Não informado]" for campo in ["endereco", "cidade", "bairro", "estado", "cep"])
-        ]
-
-        if enderecos_validos:
-            adicionar_paragrafo(doc, "Endereços:")
-            for endereco in enderecos_validos:
-                adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-                doc.add_paragraph("\n")
-        else:
-            adicionar_paragrafo(doc, "Nenhum endereço válido encontrado.")
-
-        # Texto principal do documento
-        adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
-        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {process_number}", negrito=True)
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "Informamos que foi proferido julgamento pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias no processo administrativo sancionador em referência, conforme decisão em anexo.")
-        doc.add_paragraph("\n")
-
-        # Informações sobre multa
-        adicionar_paragrafo(doc, "O QUE FAZER SE A DECISÃO TIVER APLICADO MULTA?", negrito=True)
-        adicionar_paragrafo(doc, "Sendo aplicada a penalidade de multa, esta notificação estará acompanhada de boleto bancário, que deverá ser pago até o vencimento.")
-        # (Demais textos permanecem conforme fornecidos)
-
-        # Recursos e anexos
-        adicionar_paragrafo(doc, "COMO FAÇO PARA INTERPOR RECURSO DA DECISÃO?", negrito=True)
-        adicionar_paragrafo(doc, "Havendo interesse na interposição de recurso administrativo, este poderá ser interposto no prazo de 20 dias contados do recebimento desta notificação.")
-        # (Continue com o mesmo padrão)
-
-        # Salvar o documento
-        doc.save(output_path)
-        return output_path
-    except Exception as e:
-        st.error(f"Erro ao gerar o documento: {e}")
-        return None
 
 
         # Interface Streamlit
@@ -213,6 +95,21 @@ def gerar_documento_docx(info, enderecos):
     except Exception as e:
         st.error(f"Erro ao gerar o documento: {e}")
         return None
+
+   adicionar_paragrafo(doc, "b) Autuado pessoa física:")
+        adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
+        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
+        doc.add_paragraph("\n")  # Quebra de linha
+        
+        # Fechamento
+        adicionar_paragrafo(doc, "Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: [nome e e-mail.]")
+        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
+        
+        # Salva o documento
+        doc.save(output_path)
+        print(f"Documento gerado com sucesso: {output_path}")
+    except Exception as e:
+        print(f"Erro ao gerar o documento DOCX: {e}")
 
 
 # Interface do Streamlit
