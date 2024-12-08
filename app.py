@@ -1,7 +1,6 @@
 # ---------------------------
 # Importação de Bibliotecas
 # ---------------------------
-# Importações padrão e de terceiros para funcionalidades diversas no projeto.
 import re
 from PyPDF2 import PdfReader
 import unicodedata
@@ -14,14 +13,9 @@ import streamlit as st
 # ---------------------------
 # Modelo
 # ---------------------------
-# Predições
-
 VECTOR_PATH = r"C:\Users\erickd\OneDrive - Bem Promotora de Vendas e Servicos SA\Área de Trabalho\Projeto"
 
 def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_path="address_model.pkl"):
-    """
-    Prediz endereços em um texto usando um modelo treinado.
-    """
     try:
         vectorizer = joblib.load(vectorizer_path)
         model = joblib.load(model_path)
@@ -33,9 +27,6 @@ def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_p
         return []
 
 def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", model_path="modelo_Nome.pkl"):
-    """
-    Prediz nomes, CPFs/CNPJs e e-mails em um texto usando um modelo treinado.
-    """
     try:
         vectorizer = joblib.load(vectorizer_path)
         model = joblib.load(model_path)
@@ -46,22 +37,10 @@ def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", m
         print(f"Erro ao fazer predição de nomes e e-mails: {e}")
         return {}
 
-def selecionar_arquivo():
-    """
-    Função para seleção de arquivos usando Streamlit.
-    """
-    arquivo = st.file_uploader("Selecione um arquivo", type=["pdf", "docx"])
-    if arquivo:
-        return arquivo
-    return None
-
 # ---------------------------
 # Funções de Processamento de Texto
 # ---------------------------
 def normalize_text(text):
-    """
-    Remove caracteres especiais e normaliza o texto.
-    """
     if not isinstance(text, str):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
@@ -69,9 +48,6 @@ def normalize_text(text):
     return text.strip()
 
 def corrigir_texto(texto):
-    """
-    Corrige caracteres corrompidos em textos extraídos.
-    """
     substituicoes = {
         'Ã©': 'é',
         'Ã§Ã£o': 'ção',
@@ -83,9 +59,6 @@ def corrigir_texto(texto):
     return texto
 
 def extract_text_with_pypdf2(pdf_path):
-    """
-    Extrai texto de um arquivo PDF utilizando PyPDF2.
-    """
     try:
         reader = PdfReader(pdf_path)
         text = ""
@@ -101,9 +74,6 @@ def extract_text_with_pypdf2(pdf_path):
 # Funções de Extração de Dados
 # ---------------------------
 def extract_information(text):
-    """
-    Extrai informações como nome, CPF/CNPJ, advogados e e-mails de um texto.
-    """
     autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
     cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
     socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
@@ -118,9 +88,6 @@ def extract_information(text):
     return info
 
 def extract_addresses(text):
-    """
-    Extrai informações de endereço do texto.
-    """
     addresses = []
     endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
     cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
@@ -147,42 +114,18 @@ def extract_addresses(text):
 
     return addresses
 
-def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    """
-    Adiciona um parágrafo ao documento com texto opcionalmente em negrito e com tamanho de fonte ajustável.
-    """
-    paragrafo = doc.add_paragraph()
-    run = paragrafo.add_run(texto)
-    run.bold = negrito
-    run.font.size = Pt(tamanho)
-    return paragrafo
-
 # ---------------------------
 # Função de Geração de Documento
 # ---------------------------
-def gerar_documento_docx(process_number, info, enderecos, output_path="Notificacao_Processo_Nº_{process_number}.docx"):
-    """
-    Gera um documento DOCX com informações do processo e endereços extraídos.
-    """
+def gerar_documento_docx(process_number, info, enderecos):
     try:
         diretorio_downloads = os.path.expanduser("~/Downloads")
         output_path = os.path.join(diretorio_downloads, f"Notificacao_Processo_Nº_{process_number}.docx")
         
         doc = Document()
-
         doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
-        doc.add_paragraph("\n")
-
-        # Adiciona endereços
-        for idx, endereco in enumerate(enderecos, start=1):
-            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-            doc.add_paragraph("\n")
+        doc.add_paragraph("[Ao Senhor/À Senhora]")
+        doc.add_paragraph(f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
 
 
         # Corpo principal
@@ -232,6 +175,16 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
     
 
+        # Adiciona endereços
+        for idx, endereco in enumerate(enderecos, start=1):
+            doc.add_paragraph(f"Endereço {idx}: {endereco}")
+
+        doc.add_paragraph("\nAssunto: Decisão de 1ª instância...")
+        doc.save(output_path)
+        st.success(f"Documento gerado com sucesso em {output_path}")
+    except Exception as e:
+        st.error(f"Erro ao gerar o documento DOCX: {e}")
+
 # ---------------------------
 # Interface Streamlit
 # ---------------------------
@@ -241,13 +194,13 @@ st.title("Sistema de Extração e Geração de Notificações")
 uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
 
 if uploaded_file:
-    st.write("Processando o arquivo...")
-    text = extract_text_with_pypdf2(uploaded_file)
-    if text:
-        st.success("Texto extraído com sucesso!")
-
-        info = extract_information(text)
-        addresses = extract_addresses(text)
-
-        if st.button("Gerar Documento"):
-            gerar_documento_docx("12345", info, addresses)
+    try:
+        text = extract_text_with_pypdf2(uploaded_file)
+        if text:
+            st.success("Texto extraído com sucesso!")
+            info = extract_information(text)
+            addresses = extract_addresses(text)
+            if st.button("Gerar Documento"):
+                gerar_documento_docx("12345", info, addresses)
+    except Exception as e:
+        st.error(f"Ocorreu um erro: {e}")
