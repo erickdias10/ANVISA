@@ -124,6 +124,9 @@ def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
 # ---------------------------
 # Função de Geração de Documento
 # ---------------------------
+# ---------------------------
+# Função de Geração de Documento
+# ---------------------------
 def gerar_documento_docx(process_number, info, enderecos):
     try:
         # Diretório seguro para salvar arquivos
@@ -134,12 +137,27 @@ def gerar_documento_docx(process_number, info, enderecos):
         output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{process_number}.docx")
         
         doc = Document()
-        doc.add_paragraph("\n")
+        
+        # Adiciona os endereços primeiro
+        adicionar_paragrafo(doc, "Endereços Identificados:", negrito=True, tamanho=14)
+        for idx, endereco in enumerate(enderecos, start=1):
+            adicionar_paragrafo(
+                doc,
+                f"{idx}. {endereco.get('endereco', '[Não informado]')}, "
+                f"Cidade: {endereco.get('cidade', '[Não informado]')}, "
+                f"Bairro: {endereco.get('bairro', '[Não informado]')}, "
+                f"Estado: {endereco.get('estado', '[Não informado]')}, "
+                f"CEP: {endereco.get('cep', '[Não informado]')}"
+            )
+        doc.add_paragraph("\n")  # Quebra de linha
+
+        # Adiciona a saudação e informações do autuado
         adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
 
+        doc.add_paragraph("\n")  # Quebra de linha
+
         # Corpo principal
-            # Corpo principal
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
         adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {process_number}", negrito=True)
         doc.add_paragraph("\n")  # Quebra de linha
@@ -161,33 +179,13 @@ def gerar_documento_docx(process_number, info, enderecos):
         adicionar_paragrafo(doc, "Havendo interesse na interposição de recurso administrativo, este poderá ser interposto no prazo de 20 dias contados do recebimento desta notificação, conforme disposto no art. 9º da RDC nº 266/2019.")
         adicionar_paragrafo(doc, "O protocolo do recurso deverá ser feito exclusivamente, por meio de peticionamento intercorrente no processo indicado no campo assunto desta notificação, pelo Sistema Eletrônico de Informações (SEI). Para tanto, é necessário, primeiramente, fazer o cadastro como usuário externo SEI-Anvisa. Acesse o portal da Anvisa https://www.gov.br/anvisa/pt-br > Sistemas > SEI > Acesso para Usuários Externos (SEI) e siga as orientações. Para maiores informações, consulte o Manual do Usuário Externo Sei-Anvisa, que está disponível em https://www.gov.br/anvisa/pt-br/sistemas/sei.")
         doc.add_paragraph("\n")  # Quebra de linha
-        
-        # Quais documentos devem acompanhar o recurso
-        adicionar_paragrafo(doc, "QUAIS DOCUMENTOS DEVEM ACOMPANHAR O RECURSO?", negrito=True)
-        adicionar_paragrafo(doc, "a) Autuado pessoa jurídica:")
-        adicionar_paragrafo(doc, "1. Contrato ou estatuto social da empresa, com a última alteração;")
-        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo. Somente serão aceitas procurações e substabelecimentos assinados eletronicamente, com certificação digital no padrão da Infraestrutura de Chaves Públicas Brasileira (ICP-Brasil) ou pelo assinador Gov.br.")
-        adicionar_paragrafo(doc, "3. Ata de eleição da atual diretoria quando a procuração estiver assinada por diretor que não conste como sócio da empresa;")
-        adicionar_paragrafo(doc, "4. No caso de contestação sobre o porte da empresa considerado para a dosimetria da pena de multa: comprovação do porte econômico referente ao ano em que foi proferida a decisão (documentos previstos no art. 50 da RDC nº 222/2006).")
-        adicionar_paragrafo(doc, "b) Autuado pessoa física:")
-        adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
-        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
-        doc.add_paragraph("\n")  # Quebra de linha
-       
-        # Fechamento
-        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
-        advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
-        
-        advogado_email = info.get('emails', ["[E-mail não informado]"])
-        advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
 
-                # Adiciona endereços
-        for idx, endereco in enumerate(enderecos, start=1):
-            adicionar_paragrafo(doc, f"Endereço {idx}: {endereco}")
+        # Finalização do documento
+        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
 
-        doc.add_paragraph("\nAssunto: Decisão de 1ª instância...")
         doc.save(output_path)
 
+        # Botão de download no Streamlit
         with open(output_path, "rb") as file:
             st.download_button(
                 label="Baixar Documento",
@@ -198,9 +196,6 @@ def gerar_documento_docx(process_number, info, enderecos):
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
 
-        
-        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
-        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
 
 # ---------------------------
 # Interface Streamlit
