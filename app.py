@@ -139,8 +139,6 @@ def gerar_documento_docx(info, enderecos):
         str: Caminho do arquivo gerado.
     """
     try:
-        """# Define o número do processo
-        numero_processo = info.get("numero_processo", "100")  # Valor padrão se não encontrado"""
         
         # Define o número do processo
         numero_processo = info.get("numero_processo", "100")  # Valor padrão se não encontrado
