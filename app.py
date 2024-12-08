@@ -138,6 +138,24 @@ def gerar_documento_docx(process_number, info, enderecos):
         adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
 
+        
+        # Adiciona endereços
+        for idx, endereco in enumerate(enderecos, start=1):
+            adicionar_paragrafo(doc, f"Endereço {idx}: {endereco}")
+
+        doc.add_paragraph("\nAssunto: Decisão de 1ª instância...")
+        doc.save(output_path)
+
+        with open(output_path, "rb") as file:
+            st.download_button(
+                label="Baixar Documento",
+                data=file,
+                file_name=f"Notificacao_Processo_Nº_{process_number}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+    except Exception as e:
+        st.error(f"Erro ao gerar o documento DOCX: {e}")
+
 
         # Corpo principal
             # Corpo principal
@@ -184,23 +202,6 @@ def gerar_documento_docx(process_number, info, enderecos):
         
         adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
-
-        # Adiciona endereços
-        for idx, endereco in enumerate(enderecos, start=1):
-            adicionar_paragrafo(doc, f"Endereço {idx}: {endereco}")
-
-        doc.add_paragraph("\nAssunto: Decisão de 1ª instância...")
-        doc.save(output_path)
-
-        with open(output_path, "rb") as file:
-            st.download_button(
-                label="Baixar Documento",
-                data=file,
-                file_name=f"Notificacao_Processo_Nº_{process_number}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
-    except Exception as e:
-        st.error(f"Erro ao gerar o documento DOCX: {e}")
 
 # ---------------------------
 # Interface Streamlit
