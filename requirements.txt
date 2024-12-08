@@ -1,4 +1,5 @@
-streamlit
 PyPDF2
 python-docx
+pyautogui
 joblib
+streamlit
