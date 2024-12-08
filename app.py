@@ -199,9 +199,6 @@ def gerar_documento_docx(info, enderecos):
         doc.add_paragraph("\n")  # Quebra de linha
 
         # Interface Streamlit
-        st.title("Gerador de Documentos - Processos Administrativos")
-        processo = st.text_input("Digite o número do processo:")
-
         uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
         
         # Fechamento
