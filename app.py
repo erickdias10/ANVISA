@@ -101,6 +101,22 @@ def extract_addresses(text):
     estado_matches = re.findall(estado_pattern, text)
     cep_matches = re.findall(cep_pattern, text)
 
+def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
+    """
+    Adiciona um parágrafo ao documento com texto opcionalmente em negrito e com tamanho de fonte ajustável.
+    
+    Args:
+        doc (Document): Documento onde o parágrafo será adicionado.
+        texto (str): Texto do parágrafo.
+        negrito (bool): Define se o texto será em negrito.
+        tamanho (int): Tamanho da fonte.
+    """
+    paragrafo = doc.add_paragraph()
+    run = paragrafo.add_run(texto)
+    run.bold = negrito
+    run.font.size = Pt(tamanho)
+    return paragrafo
+
     for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
         address = {
             "endereco": endereco_matches[i].strip() if i < len(endereco_matches) else None,
