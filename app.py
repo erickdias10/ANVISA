@@ -26,6 +26,17 @@ def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_p
         print(f"Erro ao fazer predição de endereços: {e}")
         return []
 
+def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", model_path="modelo_Nome.pkl"):
+    try:
+        vectorizer = joblib.load(vectorizer_path)
+        model = joblib.load(model_path)
+        text_vectorized = vectorizer.transform([text])
+        predictions = model.predict(text_vectorized)
+        return predictions
+    except Exception as e:
+        print(f"Erro ao fazer predição de nomes e e-mails: {e}")
+        return {}
+
 # ---------------------------
 # Funções de Processamento de Texto
 # ---------------------------
@@ -115,20 +126,19 @@ def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
 # ---------------------------
 def gerar_documento_docx(process_number, info, enderecos):
     try:
+        # Diretório seguro para salvar arquivos
         output_directory = os.path.join(os.getcwd(), "output")
         os.makedirs(output_directory, exist_ok=True)
+
+        # Caminho completo do arquivo
         output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{process_number}.docx")
         
         doc = Document()
+        doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
 
-        # Adiciona endereços
-        adicionar_paragrafo(doc, "Endereços Identificados:", negrito=True)
-        for idx, endereco in enumerate(enderecos, start=1):
-            adicionar_paragrafo(doc, f"{idx}. {endereco.get('endereco', '[Não informado]')}, Cidade: {endereco.get('cidade', '[Não informado]')}, Bairro: {endereco.get('bairro', '[Não informado]')}, Estado: {endereco.get('estado', '[Não informado]')}, CEP: {endereco.get('cep', '[Não informado]')}")
-
-# Corpo principal
+        # Corpo principal
             # Corpo principal
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
         adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {process_number}", negrito=True)
@@ -163,22 +173,21 @@ def gerar_documento_docx(process_number, info, enderecos):
         adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
         adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
         doc.add_paragraph("\n")  # Quebra de linha
-
-        # Interface Streamlit
-        st.title("Gerador de Documentos - Processos Administrativos")
-        processo = st.text_input("Digite o número do processo:")
-
-        uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
-        
+       
         # Fechamento
         advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
         advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
         
         advogado_email = info.get('emails', ["[E-mail não informado]"])
         advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
-        
-        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
-        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
+
+                # Adiciona endereços
+        for idx, endereco in enumerate(enderecos, start=1):
+            adicionar_paragrafo(doc, f"Endereço {idx}: {endereco}")
+
+        doc.add_paragraph("\nAssunto: Decisão de 1ª instância...")
+        doc.save(output_path)
+
         with open(output_path, "rb") as file:
             st.download_button(
                 label="Baixar Documento",
@@ -188,6 +197,10 @@ def gerar_documento_docx(process_number, info, enderecos):
             )
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
+
+        
+        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
+        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
 
 # ---------------------------
 # Interface Streamlit
