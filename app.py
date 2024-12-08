@@ -63,6 +63,32 @@ def baixar_processo():
     except Exception as e:
         print(f"Erro ao baixar o processo: {e}")
 
+
+def buscar_ultimo_arquivo_baixado(diretorio_downloads):
+    """
+    Busca o último arquivo baixado no diretório especificado.
+    
+    Args:
+        diretorio_downloads (str): Caminho para o diretório de downloads.
+        
+    Returns:
+        str: Caminho completo do último arquivo baixado, ou None se nenhum arquivo for encontrado.
+    """
+    try:
+        arquivos = glob.glob(os.path.join(diretorio_downloads, "*"))
+        
+        if not arquivos:
+            print("Nenhum arquivo encontrado no diretório de downloads.")
+            return None
+
+        ultimo_arquivo = max(arquivos, key=os.path.getmtime)
+        print(f"Último arquivo baixado encontrado: {ultimo_arquivo}")
+        return ultimo_arquivo
+    except Exception as e:
+        print(f"Erro ao buscar o último arquivo baixado: {e}")
+        return None
+
+
 # ---------------------------
 # Funções de Processamento de Texto
 # ---------------------------
