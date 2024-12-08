@@ -71,11 +71,6 @@ def selecionar_arquivo():
         return arquivo
     return None
 
-'''# Uso:
-arquivo_selecionado = selecionar_arquivo()
-if arquivo_selecionado:
-    st.write(f"Arquivo selecionado: {arquivo_selecionado.name}")'''
-
 
 # ---------------------------
 # Funções de Processamento de Texto
