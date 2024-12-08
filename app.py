@@ -115,37 +115,12 @@ def extract_addresses(text):
     return addresses or []
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    """
-    Adiciona um parágrafo ao documento com texto opcionalmente em negrito e com tamanho de fonte ajustável.
-    
-    Args:
-        doc (Document): Documento onde o parágrafo será adicionado.
-        texto (str): Texto do parágrafo.
-        negrito (bool): Define se o texto será em negrito.
-        tamanho (int): Tamanho da fonte.
-    """
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
     run.bold = negrito
     run.font.size = Pt(tamanho)
     return paragrafo
 
-    for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
-        address = {
-            "endereco": endereco_matches[i].strip() if i < len(endereco_matches) else None,
-            "cidade": cidade_matches[i].strip() if i < len(cidade_matches) else None,
-            "bairro": bairro_matches[i].strip() if i < len(bairro_matches) else None,
-            "estado": estado_matches[i].strip() if i < len(estado_matches) else None,
-            "cep": cep_matches[i].strip() if i < len(cep_matches) else None
-        }
-        if any(address.values()) and address not in addresses:
-            addresses.append(address)
-
-    return addresses
-
-# ---------------------------
-# Função de Geração de Documento
-# ---------------------------
 # ---------------------------
 # Função de Geração de Documento
 # ---------------------------
@@ -153,7 +128,7 @@ def gerar_documento_docx(process_number, info, enderecos):
     try:
         # Diretório seguro para salvar arquivos
         output_directory = os.path.join(os.getcwd(), "output")
-        os.makedirs(output_directory, exist_ok=True)  # Garante que o diretório exista
+        os.makedirs(output_directory, exist_ok=True)
 
         # Caminho completo do arquivo
         output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{process_number}.docx")
@@ -169,7 +144,14 @@ def gerar_documento_docx(process_number, info, enderecos):
 
         doc.add_paragraph("\nAssunto: Decisão de 1ª instância...")
         doc.save(output_path)
-        st.success(f"Documento gerado com sucesso: {output_path}")
+
+        with open(output_path, "rb") as file:
+            st.download_button(
+                label="Baixar Documento",
+                data=file,
+                file_name=f"Notificacao_Processo_Nº_{process_number}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
 
@@ -178,7 +160,6 @@ def gerar_documento_docx(process_number, info, enderecos):
 # ---------------------------
 st.title("Sistema de Extração e Geração de Notificações")
 
-# Upload do arquivo PDF
 uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
 
 if uploaded_file:
@@ -193,4 +174,3 @@ if uploaded_file:
                 gerar_documento_docx("12345", info, addresses)
     except Exception as e:
         st.error(f"Ocorreu um erro: {e}")
-
