@@ -137,14 +137,7 @@ def gerar_documento_docx(process_number, info, enderecos):
         doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
-        
-        # Adiciona endereços
-        for idx, endereco in enumerate(enderecos, start=1):
-            adicionar_paragrafo(doc, f"Endereço {idx}: {endereco}")
 
-        doc.add_paragraph("\nAssunto: Decisão de 1ª instância...")
-        doc.save(output_path)
-        
         # Corpo principal
             # Corpo principal
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
@@ -187,6 +180,13 @@ def gerar_documento_docx(process_number, info, enderecos):
         
         advogado_email = info.get('emails', ["[E-mail não informado]"])
         advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
+
+                # Adiciona endereços
+        for idx, endereco in enumerate(enderecos, start=1):
+            adicionar_paragrafo(doc, f"Endereço {idx}: {endereco}")
+
+        doc.add_paragraph("\nAssunto: Decisão de 1ª instância...")
+        doc.save(output_path)
 
         with open(output_path, "rb") as file:
             st.download_button(
