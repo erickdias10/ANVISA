@@ -17,6 +17,57 @@ import joblib
 import streamlit as st
 
 # ---------------------------
+# Modelo
+# ---------------------------
+# Predições
+
+VECTOR_PATH = r"C:\Users\erickd\OneDrive - Bem Promotora de Vendas e Servicos SA\Área de Trabalho\Projeto"
+
+def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_path="address_model.pkl"):
+    """
+    Prediz endereços em um texto usando um modelo treinado.
+
+    Args:
+        text (str): Texto a ser analisado.
+        vectorizer_path (str): Caminho para o vetorizar salvo.
+        model_path (str): Caminho para o modelo treinado.
+
+    Returns:
+        list: Lista de endereços previstos.
+    """
+    try:
+        vectorizer = joblib.load(vectorizer_path)
+        model = joblib.load(model_path)
+        text_vectorized = vectorizer.transform([text])
+        predictions = model.predict(text_vectorized)
+        return predictions
+    except Exception as e:
+        print(f"Erro ao fazer predição de endereços: {e}")
+        return []
+
+def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", model_path="modelo_Nome.pkl"):
+    """
+    Prediz nomes, CPFs/CNPJs e e-mails em um texto usando um modelo treinado.
+
+    Args:
+        text (str): Texto a ser analisado.
+        vectorizer_path (str): Caminho para o vetorizar salvo.
+        model_path (str): Caminho para o modelo treinado.
+
+    Returns:
+        dict: Dicionário com previsões de nomes e e-mails.
+    """
+    try:
+        vectorizer = joblib.load(vectorizer_path)
+        model = joblib.load(model_path)
+        text_vectorized = vectorizer.transform([text])
+        predictions = model.predict(text_vectorized)
+        return predictions
+    except Exception as e:
+        print(f"Erro ao fazer predição de nomes e e-mails: {e}")
+        return {}
+
+# ---------------------------
 # Funções de Automação (PyAutoGUI)
 # ---------------------------
 # Funções para automação de interface simulando interações do usuário.
@@ -310,8 +361,21 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
 # ---------------------------
 # Lógica principal que integra todos os componentes e executa o fluxo completo.
 def main():
+    print("Testando carregamento dos modelos...")
+    try:
+        vectorizer_address = joblib.load(os.path.join(VECTOR_PATH, "vectorizer.pkl"))
+        model_address = joblib.load(os.path.join(VECTOR_PATH, "address_model.pkl"))
+        print("Modelos de endereço carregados com sucesso.")
+
+        vectorizer_name = joblib.load(os.path.join(VECTOR_PATH, "vectorizer_Nome.pkl"))
+        model_name = joblib.load(os.path.join(VECTOR_PATH, "modelo_Nome.pkl"))
+        print("Modelos de nome e e-mail carregados com sucesso.")
+    except Exception as e:
+        print(f"Erro ao carregar modelos: {e}")
+        return  # Sai da função se os modelos não forem carregados
+
     processo = input("Digite o número do processo: ")
-    
+
     buscar_processo(processo)
     baixar_processo()
 
@@ -319,11 +383,45 @@ def main():
     pdf_path = buscar_ultimo_arquivo_baixado(diretorio_downloads)
 
     if pdf_path:
+        print(f"PDF encontrado: {pdf_path}")
         texto_extraido = extract_text_with_pypdf2(pdf_path)
         if texto_extraido:
+            print("Texto extraído com sucesso.")
+
+            # Extração de informações com regex
             info = extract_information(texto_extraido)
-            enderecos = extract_addresses(texto_extraido)
-            gerar_documento_docx(processo, info, enderecos)
+            print(f"Informações extraídas: {info}")
+
+            # Extração de endereços com regex
+            enderecos_regex = extract_addresses(texto_extraido)
+            print(f"Endereços extraídos com regex: {enderecos_regex}")
+
+            # Predição de endereços com modelo treinado
+            enderecos_pred = predict_addresses_with_model(
+                texto_extraido,
+                vectorizer_path=os.path.join(VECTOR_PATH, "vectorizer.pkl"),
+                model_path=os.path.join(VECTOR_PATH, "address_model.pkl"),
+            )
+            print(f"Endereços previstos: {enderecos_pred}")
+
+            # Formatar os endereços previstos para serem compatíveis com enderecos_regex
+            enderecos_pred_formatados = [
+                {"endereco": endereco, "cidade": None, "bairro": None, "estado": None, "cep": None}
+                for endereco in enderecos_pred
+            ]
+
+            # Predição de nomes e e-mails com modelo treinado
+            predicoes_nome_email = predict_Nome_Email_with_model(
+                texto_extraido,
+                vectorizer_path=os.path.join(VECTOR_PATH, "vectorizer_Nome.pkl"),
+                model_path=os.path.join(VECTOR_PATH, "modelo_Nome.pkl"),
+            )
+            print(f"Predições de nomes e e-mails: {predicoes_nome_email}")
+
+            # Combinação de resultados
+            print("Gerando documento com informações extraídas e predições...")
+            gerar_documento_docx(processo, info, enderecos_regex + enderecos_pred_formatados)
+            print(f"Documento gerado com sucesso no caminho: {os.path.join(diretorio_downloads, f'Notificacao_Processo_Nº_{processo}.docx')}")
         else:
             print("Nenhum texto extraído do PDF.")
     else:
