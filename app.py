@@ -82,8 +82,8 @@ def extract_information(text):
     info = {
         "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
         "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
-        "socios_advogados": re.findall(socios_adv_pattern, text),
-        "emails": re.findall(email_pattern, text),
+        "socios_advogados": re.findall(socios_adv_pattern, text) or [],
+        "emails": re.findall(email_pattern, text) or [],
     }
     return info
 
@@ -100,6 +100,19 @@ def extract_addresses(text):
     bairro_matches = re.findall(bairro_pattern, text)
     estado_matches = re.findall(estado_pattern, text)
     cep_matches = re.findall(cep_pattern, text)
+
+    for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
+        address = {
+            "endereco": endereco_matches[i].strip() if i < len(endereco_matches) else None,
+            "cidade": cidade_matches[i].strip() if i < len(cidade_matches) else None,
+            "bairro": bairro_matches[i].strip() if i < len(bairro_matches) else None,
+            "estado": estado_matches[i].strip() if i < len(estado_matches) else None,
+            "cep": cep_matches[i].strip() if i < len(cep_matches) else None
+        }
+        if any(address.values()):
+            addresses.append(address)
+
+    return addresses or []
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     """
