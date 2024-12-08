@@ -227,8 +227,9 @@ if uploaded_file:
         text = extract_text_with_pypdf2(uploaded_file)
         if text:
             st.success("Texto extraído com sucesso!")
-            info = extract_information(text)
-            addresses = extract_addresses(text)
+            info = extract_information(text) or {}
+            addresses = extract_addresses(text) or []
+
             if st.button("Gerar Documento"):
                 gerar_documento_docx("12345", info, addresses)
     except Exception as e:
