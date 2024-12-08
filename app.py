@@ -213,6 +213,22 @@ def extract_addresses(text):
 
     return addresses
 
+def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
+    """
+    Adiciona um parágrafo ao documento com texto opcionalmente em negrito e com tamanho de fonte ajustável.
+    
+    Args:
+        doc (Document): Documento onde o parágrafo será adicionado.
+        texto (str): Texto do parágrafo.
+        negrito (bool): Define se o texto será em negrito.
+        tamanho (int): Tamanho da fonte.
+    """
+    paragrafo = doc.add_paragraph()
+    run = paragrafo.add_run(texto)
+    run.bold = negrito
+    run.font.size = Pt(tamanho)
+    return paragrafo
+
 # ---------------------------
 # Função de Geração de Documento
 # ---------------------------
