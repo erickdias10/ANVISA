@@ -62,6 +62,15 @@ def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", m
         print(f"Erro ao fazer predição de nomes e e-mails: {e}")
         return {}
 
+def selecionar_arquivo():
+    """
+    Função para seleção de arquivos usando Streamlit.
+    """
+    arquivo = st.file_uploader("Selecione um arquivo", type=["pdf", "docx"])
+    if arquivo:
+        return arquivo
+    return None
+
 # Uso:
 arquivo_selecionado = selecionar_arquivo()
 if arquivo_selecionado:
