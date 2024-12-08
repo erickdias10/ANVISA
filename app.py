@@ -71,10 +71,10 @@ def selecionar_arquivo():
         return arquivo
     return None
 
-# Uso:
+'''# Uso:
 arquivo_selecionado = selecionar_arquivo()
 if arquivo_selecionado:
-    st.write(f"Arquivo selecionado: {arquivo_selecionado.name}")
+    st.write(f"Arquivo selecionado: {arquivo_selecionado.name}")'''
 
 
 # ---------------------------
