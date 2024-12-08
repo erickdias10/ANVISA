@@ -5,11 +5,9 @@
 import re
 from PyPDF2 import PdfReader
 import unicodedata
-from tkinter import Tk, filedialog
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
-import pyautogui
 import os
 import glob
 import time
@@ -67,77 +65,19 @@ def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", m
         print(f"Erro ao fazer predição de nomes e e-mails: {e}")
         return {}
 
-# ---------------------------
-# Funções de Automação (PyAutoGUI)
-# ---------------------------
-# Funções para automação de interface simulando interações do usuário.
-def move_and_click(x, y):
+def selecionar_arquivo():
     """
-    Move o cursor do mouse para as coordenadas especificadas e realiza um clique.
+    Função para seleção de arquivos usando Streamlit.
+    """
+    arquivo = st.file_uploader("Selecione um arquivo", type=["pdf", "docx"])
+    if arquivo:
+        return arquivo
+    return None
 
-    Args:
-        x (int): Coordenada X para mover o mouse.
-        y (int): Coordenada Y para mover o mouse.
-    """
-    try:
-        pyautogui.moveTo(x, y)
-        pyautogui.click()
-    except Exception as e:
-        print(f"Erro ao clicar nas coordenadas ({x}, {y}): {e}")
-
-def buscar_processo(processo):
-    """
-    Busca um processo no sistema através de automação.
-
-    Args:
-        processo (str): Número do processo.
-    """
-    try:
-        print("Buscando o processo...")
-        move_and_click(1465, 199)  # Coordenadas do campo de busca
-        pyautogui.write(processo)  # Digita o número do processo
-        pyautogui.press("enter")  # Pressiona Enter
-        time.sleep(10)  # Aguarda o carregamento
-    except Exception as e:
-        print(f"Erro ao buscar o processo: {e}")
-
-def baixar_processo():
-    """
-    Realiza o download do processo em PDF utilizando automação.
-    """
-    try:
-        print("Baixando o processo...")
-        move_and_click(1084, 256)  # Botão para gerar o PDF
-        time.sleep(10)  # Aguarda carregamento
-        move_and_click(1792, 288)  # Botão para confirmar
-        time.sleep(20)  # Aguarda o download
-    except Exception as e:
-        print(f"Erro ao baixar o processo: {e}")
-
-
-def buscar_ultimo_arquivo_baixado(diretorio_downloads):
-    """
-    Busca o último arquivo baixado no diretório especificado.
-    
-    Args:
-        diretorio_downloads (str): Caminho para o diretório de downloads.
-        
-    Returns:
-        str: Caminho completo do último arquivo baixado, ou None se nenhum arquivo for encontrado.
-    """
-    try:
-        arquivos = glob.glob(os.path.join(diretorio_downloads, "*"))
-        
-        if not arquivos:
-            print("Nenhum arquivo encontrado no diretório de downloads.")
-            return None
-
-        ultimo_arquivo = max(arquivos, key=os.path.getmtime)
-        print(f"Último arquivo baixado encontrado: {ultimo_arquivo}")
-        return ultimo_arquivo
-    except Exception as e:
-        print(f"Erro ao buscar o último arquivo baixado: {e}")
-        return None
+# Uso:
+arquivo_selecionado = selecionar_arquivo()
+if arquivo_selecionado:
+    st.write(f"Arquivo selecionado: {arquivo_selecionado.name}")
 
 
 # ---------------------------
