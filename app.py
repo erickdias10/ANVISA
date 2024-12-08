@@ -1,4 +1,7 @@
-# Bloco 1: Importação de Bibliotecas
+# ---------------------------
+# Importação de Bibliotecas
+# ---------------------------
+# Importações padrão e de terceiros para funcionalidades diversas no projeto.
 import re
 from PyPDF2 import PdfReader
 import unicodedata
@@ -13,10 +16,13 @@ import time
 import joblib
 import streamlit as st
 
-# Bloco 2: Funções de Automação de Interface (PyAutoGUI)
+# ---------------------------
+# Funções de Automação (PyAutoGUI)
+# ---------------------------
+# Funções para automação de interface simulando interações do usuário.
 def move_and_click(x, y):
     """
-    Move o cursor do mouse para as coordenadas especificadas e clica.
+    Move o cursor do mouse para as coordenadas especificadas e realiza um clique.
 
     Args:
         x (int): Coordenada X para mover o mouse.
@@ -30,114 +36,46 @@ def move_and_click(x, y):
 
 def buscar_processo(processo):
     """
-    Realiza a busca de um processo no sistema usando automação.
+    Busca um processo no sistema através de automação.
 
     Args:
-        processo (str): Número do processo a ser buscado.
+        processo (str): Número do processo.
     """
     try:
-        time.sleep(2) #Aguarde o inicio
         print("Buscando o processo...")
         move_and_click(1465, 199)  # Coordenadas do campo de busca
         pyautogui.write(processo)  # Digita o número do processo
-        pyautogui.press("enter")  # Pressiona Enter para buscar
+        pyautogui.press("enter")  # Pressiona Enter
         time.sleep(10)  # Aguarda o carregamento
     except Exception as e:
         print(f"Erro ao buscar o processo: {e}")
 
 def baixar_processo():
     """
-    Realiza o download do processo em formato PDF usando automação.
+    Realiza o download do processo em PDF utilizando automação.
     """
     try:
         print("Baixando o processo...")
-        move_and_click(1084, 256)  # Botão para gerar em PDF
-        time.sleep(10)  # Aguarda o carregamento do botão Gerar
-        move_and_click(1792, 288)  # Botão para confirmar geração
-        time.sleep(20)  # Aguarda o download do arquivo
+        move_and_click(1084, 256)  # Botão para gerar o PDF
+        time.sleep(10)  # Aguarda carregamento
+        move_and_click(1792, 288)  # Botão para confirmar
+        time.sleep(20)  # Aguarda o download
     except Exception as e:
         print(f"Erro ao baixar o processo: {e}")
 
-def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_path="address_model.pkl"):
-    """
-    Prediz endereços em um texto usando um modelo treinado.
-
-    Args:
-        text (str): Texto a ser analisado.
-        vectorizer_path (str): Caminho para o arquivo do vetorizar.
-        model_path (str): Caminho para o modelo treinado.
-
-    Returns:
-        list: Lista de endereços previstos.
-    """
-    try:
-        # Carrega o vetorizar e o modelo
-        vectorizer = joblib.load(vectorizer_path)
-        model = joblib.load(model_path)
-
-        # Prepara o texto para predição
-        text_vectorized = vectorizer.transform([text])
-        predictions = model.predict(text_vectorized)
-
-        # Retorna as previsões
-        return predictions
-    except Exception as e:
-        print(f"Erro ao fazer predição com o modelo: {e}")
-        return []
-
-def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", model_path="modelo_Nome.pkl"):
-    """
-    Prediz Nomes dos Autuados, CPF, CNPJ e Emails em um texto usando um modelo treinado.
-
-    Args:
-        text (str): Texto a ser analisado.
-        vectorizer_path (str): Caminho para o arquivo do vetorizar.
-        model_path (str): Caminho para o modelo treinado.
-
-    Returns:
-        list: Lista de endereços previstos.
-    """
-    try:
-        # Carrega o vetorizar e o modelo
-        vectorizer = joblib.load(vectorizer_path)
-        model = joblib.load(model_path)
-
-        # Prepara o texto para predição
-        text_vectorized = vectorizer.transform([text])
-        predictions = model.predict(text_vectorized)
-
-        # Retorna as previsões
-        return predictions
-    except Exception as e:
-        print(f"Erro ao fazer predição com o modelo: {e}")
-        return []
-
-def buscar_ultimo_arquivo_baixado(diretorio_downloads):
-    """
-    Busca o último arquivo baixado no diretório especificado.
-
-    Args:
-        diretorio_downloads (str): Caminho para o diretório de downloads.
-
-    Returns:
-        str: Caminho completo do último arquivo baixado, ou None se nenhum arquivo for encontrado.
-    """
-    try:
-        arquivos = glob.glob(os.path.join(diretorio_downloads, "*"))
-        if not arquivos:
-            print("Nenhum arquivo encontrado no diretório de downloads.")
-            return None
-
-        ultimo_arquivo = max(arquivos, key=os.path.getmtime)
-        print(f"Último arquivo baixado encontrado: {ultimo_arquivo}")
-        return ultimo_arquivo
-    except Exception as e:
-        print(f"Erro ao buscar o último arquivo baixado: {e}")
-        return None
-
+# ---------------------------
+# Funções de Processamento de Texto
+# ---------------------------
+# Funções para manipulação e extração de texto de arquivos PDF.
 def normalize_text(text):
     """
     Remove caracteres especiais e normaliza o texto.
+
+    Args:
+        text (str): Texto a ser normalizado.
+
+    Returns:
+        str: Texto normalizado.
     """
     if not isinstance(text, str):
         return text
@@ -147,7 +85,13 @@ def normalize_text(text):
 
 def corrigir_texto(texto):
     """
-    Corrige caracteres corrompidos em texto.
+    Corrige caracteres corrompidos em textos extraídos.
+
+    Args:
+        texto (str): Texto a ser corrigido.
+
+    Returns:
+        str: Texto corrigido.
     """
     substituicoes = {
         'Ã©': 'é',
@@ -161,7 +105,13 @@ def corrigir_texto(texto):
 
 def extract_text_with_pypdf2(pdf_path):
     """
-    Extrai texto de PDFs usando PyPDF2.
+    Extrai texto de um arquivo PDF utilizando PyPDF2.
+
+    Args:
+        pdf_path (str): Caminho do arquivo PDF.
+
+    Returns:
+        str: Texto extraído.
     """
     try:
         reader = PdfReader(pdf_path)
@@ -171,196 +121,45 @@ def extract_text_with_pypdf2(pdf_path):
         text = corrigir_texto(normalize_text(text))
         return text.strip()
     except Exception as e:
-        print(f"Erro ao processar PDF com PyPDF2 {pdf_path}: {e}")
+        print(f"Erro ao processar PDF {pdf_path}: {e}")
         return ''
 
-# Bloco 4: Processamento de Endereços e Formatação do Documento
-def extract_addresses(text):
+# ---------------------------
+# Funções de Extração de Dados
+# ---------------------------
+# Funções para identificar informações específicas em textos processados.
+def extract_information(text):
     """
-    Extrai informações de endereço do texto usando expressões regulares.
+    Extrai informações como nome, CPF/CNPJ, advogados e e-mails de um texto.
 
     Args:
-        text (str): Texto extraído do PDF.
+        text (str): Texto de entrada.
 
     Returns:
-        list: Lista de dicionários contendo os endereços extraídos.
+        dict: Informações extraídas.
     """
-    addresses = []
-    endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
-    cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
-    bairro_pattern = r"Bairro:\s*([\w\s]+)"
-    estado_pattern = r"Estado:\s*([A-Z]{2})"
-    cep_pattern = r"CEP:\s*(\d{2}\.\d{3}-\d{3}|\d{5}-\d{3})"
+    autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
+    cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
+    socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
+    email_pattern = r"(?:E-mail|Email):\s*([\w.-]+@[\w.-]+\.[a-z]{2,})"
 
-    endereco_matches = re.findall(endereco_pattern, text)
-    cidade_matches = re.findall(cidade_pattern, text)
-    bairro_matches = re.findall(bairro_pattern, text)
-    estado_matches = re.findall(estado_pattern, text)
-    cep_matches = re.findall(cep_pattern, text)
-
-    for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
-        address = {
-            "endereco": endereco_matches[i].strip() if i < len(endereco_matches) else None,
-            "cidade": cidade_matches[i].strip() if i < len(cidade_matches) else None,
-            "bairro": bairro_matches[i].strip() if i < len(bairro_matches) else None,
-            "estado": estado_matches[i].strip() if i < len(estado_matches) else None,
-            "cep": cep_matches[i].strip() if i < len(cep_matches) else None
-        }
-        if any(address.values()) and address not in addresses:
-            addresses.append(address)
-
-    return addresses
-
-def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    """
-    Adiciona um parágrafo ao documento com texto opcionalmente em negrito e com tamanho de fonte ajustável.
-    """
-    paragrafo = doc.add_paragraph()
-    run = paragrafo.add_run(texto)
-    run.bold = negrito
-    run.font.size = Pt(tamanho)
-    return paragrafo
-
-import re
-from PyPDF2 import PdfReader
-import unicodedata
-from tkinter import Tk, filedialog
-from docx import Document
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.shared import Pt
-import pyautogui
-import os
-import glob
-import time
-from docx import Document
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.shared import Pt
-
-
-def move_and_click(x, y):
-    """
-    Move o cursor do mouse para as coordenadas especificadas e clica.
-
-    Args:
-        x (int): Coordenada X para mover o mouse.
-        y (int): Coordenada Y para mover o mouse.
-    """
-    try:
-        pyautogui.moveTo(x, y)
-        pyautogui.click()
-    except Exception as e:
-        print(f"Erro ao clicar nas coordenadas ({x}, {y}): {e}")
-
-
-def buscar_processo(processo):
-    """
-    Realiza a busca de um processo no sistema usando automação.
-    
-    Args:
-        processo (str): Número do processo a ser buscado.
-    """
-    try:
-        print("Buscando o processo...")
-        move_and_click(1465, 199)  # Coordenadas do campo de busca
-        pyautogui.write(processo)  # Digita o número do processo
-        pyautogui.press("enter")  # Pressiona Enter para buscar
-        time.sleep(10)  # Aguarda o carregamento
-    except Exception as e:
-        print(f"Erro ao buscar o processo: {e}")
-
-
-def baixar_processo():
-    """
-    Realiza o download do processo em formato PDF usando automação.
-    """
-    try:
-        print("Baixando o processo...")
-        move_and_click(1084, 256)  # Botão para gerar em PDF
-        time.sleep(10)  # Aguarda o carregamento do botão Gerar
-        move_and_click(1792, 288)  # Botão para confirmar geração
-        time.sleep(20)  # Aguarda o download do arquivo
-    except Exception as e:
-        print(f"Erro ao baixar o processo: {e}")
-
-
-def buscar_ultimo_arquivo_baixado(diretorio_downloads):
-    """
-    Busca o último arquivo baixado no diretório especificado.
-    
-    Args:
-        diretorio_downloads (str): Caminho para o diretório de downloads.
-        
-    Returns:
-        str: Caminho completo do último arquivo baixado, ou None se nenhum arquivo for encontrado.
-    """
-    try:
-        arquivos = glob.glob(os.path.join(diretorio_downloads, "*"))
-        
-        if not arquivos:
-            print("Nenhum arquivo encontrado no diretório de downloads.")
-            return None
-
-        ultimo_arquivo = max(arquivos, key=os.path.getmtime)
-        print(f"Último arquivo baixado encontrado: {ultimo_arquivo}")
-        return ultimo_arquivo
-    except Exception as e:
-        print(f"Erro ao buscar o último arquivo baixado: {e}")
-        return None
-
-
-def normalize_text(text):
-    """
-    Remove caracteres especiais e normaliza o texto.
-    """
-    if not isinstance(text, str):
-        return text
-    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    text = re.sub(r"\s{2,}", " ", text)  # Remove múltiplos espaços
-    return text.strip()
-
-
-def corrigir_texto(texto):
-    """
-    Corrige caracteres corrompidos em texto.
-    """
-    substituicoes = {
-        'Ã©': 'é',
-        'Ã§Ã£o': 'ção',
-        'Ã³': 'ó',
-        'Ã': 'à',
-        # Adicione mais substituições conforme necessário
+    info = {
+        "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
+        "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
+        "socios_advogados": re.findall(socios_adv_pattern, text),
+        "emails": re.findall(email_pattern, text),
     }
-    for errado, correto in substituicoes.items():
-        texto = texto.replace(errado, correto)
-    return texto
-
-
-def clean_fragmented_text(text):
-    """
-    Limpa fragmentos de palavras coladas.
-    """
-    return re.sub(r"(\w)\s+(\w)", r"\1 \2", text).strip()
-
-
-def extract_text_with_pypdf2(pdf_path):
-    """
-    Extrai texto de PDFs usando PyPDF2.
-    """
-    try:
-        reader = PdfReader(pdf_path)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() or ""
-        text = corrigir_texto(normalize_text(text))
-        return clean_fragmented_text(text)
-    except Exception as e:
-        print(f"Erro ao processar PDF com PyPDF2 {pdf_path}: {e}")
-        return ''
-
+    return info
 
 def extract_addresses(text):
     """
     Extrai informações de endereço do texto.
+
+    Args:
+        text (str): Texto contendo endereços.
+
+    Returns:
+        list: Lista de endereços extraídos.
     """
     addresses = []
     endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
@@ -388,32 +187,19 @@ def extract_addresses(text):
 
     return addresses
 
-
-def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    """
-    Adiciona um parágrafo ao documento com texto opcionalmente em negrito e com tamanho de fonte ajustável.
-    
-    Args:
-        doc (Document): Documento onde o parágrafo será adicionado.
-        texto (str): Texto do parágrafo.
-        negrito (bool): Define se o texto será em negrito.
-        tamanho (int): Tamanho da fonte.
-    """
-    paragrafo = doc.add_paragraph()
-    run = paragrafo.add_run(texto)
-    run.bold = negrito
-    run.font.size = Pt(tamanho)
-    return paragrafo
-
+# ---------------------------
+# Função de Geração de Documento
+# ---------------------------
+# Função que cria o arquivo DOCX com base nos dados extraídos.
 def gerar_documento_docx(process_number, info, enderecos, output_path="Notificacao_Processo_Nº_{process_number}.docx"):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
 
     Args:
         process_number (str): Número do processo administrativo.
-        info (dict): Dicionário com informações extraídas do texto.
-        enderecos (list): Lista de dicionários contendo informações de endereços.
-        output_path (str): Caminho para salvar o documento gerado.
+        info (dict): Informações extraídas do texto.
+        enderecos (list): Endereços extraídos.
+        output_path (str): Caminho para salvar o documento.
     """
     try:
         diretorio_downloads = os.path.expanduser("~/Downloads")
@@ -470,23 +256,6 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
         adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
         adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
         doc.add_paragraph("\n")  # Quebra de linha
-
-        # Interface Streamlit
-        st.title("Gerador de Documentos - Processos Administrativos")
-        processo = st.text_input("Digite o número do processo:")
-
-        uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
-        
-        # Fechamento
-        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
-        advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
-        
-        advogado_email = info.get('emails', ["[E-mail não informado]"])
-        advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
-        
-        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
-        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
-
         
         # Salva o documento
         doc.save(output_path)
@@ -494,61 +263,29 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
     except Exception as e:
         print(f"Erro ao gerar o documento DOCX: {e}")
 
-def extract_information(text):
-    """
-    Extrai informações específicas do texto, como Nome do Autuado, CNPJ/CPF, Sócios/Advogados e E-mails.
-
-    Args:
-        text (str): Texto a ser analisado.
-
-    Returns:
-        dict: Dicionário com as informações extraídas.
-    """
-    autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
-    cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
-    socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
-    email_pattern = r"(?:E-mail|Email):\s*([\w.-]+@[\w.-]+\.[a-z]{2,})"
-
-    info = {
-        "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
-        "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
-        "socios_advogados": re.findall(socios_adv_pattern, text),
-        "emails": re.findall(email_pattern, text),
-    }
-    return info
-
+# ---------------------------
+# Função Principal
+# ---------------------------
+# Lógica principal que integra todos os componentes e executa o fluxo completo.
 def main():
     processo = input("Digite o número do processo: ")
     
-    # Busca o processo e faz o download
     buscar_processo(processo)
     baixar_processo()
 
-    # Busca o último arquivo baixado
     diretorio_downloads = os.path.expanduser("~/Downloads")
-    pdf_path = buscar_ultimo_arquivo_baixado(diretorio_downloads)  # pdf_path é atribuído aqui
+    pdf_path = buscar_ultimo_arquivo_baixado(diretorio_downloads)
 
-    if pdf_path:  # Verifica se o arquivo foi encontrado
-        texto_extraido = extract_text_with_pypdf2(pdf_path)  # Extrai o texto do PDF
-        if texto_extraido:  # Verifica se algum texto foi extraído
-            print("Texto extraído com sucesso.")
-
-            # Extrair informações do texto
+    if pdf_path:
+        texto_extraido = extract_text_with_pypdf2(pdf_path)
+        if texto_extraido:
             info = extract_information(texto_extraido)
-            if not info:
-                print("Nenhuma informação extraída do texto.")
-                return  # Para a execução se não houver informações
-
-            # Extrair endereços
             enderecos = extract_addresses(texto_extraido)
-
-            # Gerar o documento com base nas informações extraídas
-            print("Gerando documento...")
             gerar_documento_docx(processo, info, enderecos)
         else:
-            print("Nenhum texto foi extraído do PDF.")
+            print("Nenhum texto extraído do PDF.")
     else:
-        print("Nenhum arquivo foi encontrado.")
+        print("Nenhum arquivo encontrado.")
 
 if __name__ == "__main__":
     main()
