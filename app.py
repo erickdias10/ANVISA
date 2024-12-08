@@ -6,11 +6,8 @@ import re
 from PyPDF2 import PdfReader
 import unicodedata
 from docx import Document
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
 import os
-import glob
-import time
 import joblib
 import streamlit as st
 
@@ -306,6 +303,35 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
         print(f"Documento gerado com sucesso: {output_path}")
     except Exception as e:
         print(f"Erro ao gerar o documento DOCX: {e}")
+        
+# ---------------------------
+# Interface Streamlit
+# ---------------------------
+st.title("Sistema de Extração e Geração de Notificações")
+
+# Upload do arquivo PDF
+uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
+
+if uploaded_file:
+    # Extração de texto
+    st.write("Processando o arquivo...")
+    text = extract_text_with_pypdf2(uploaded_file)
+    if text:
+        st.success("Texto extraído com sucesso!")
+
+        # Predição de endereços
+        addresses = predict_addresses_with_model(
+            text,
+            vectorizer_path=os.path.join(VECTOR_PATH, "vectorizer.pkl"),
+            model_path=os.path.join(VECTOR_PATH, "address_model.pkl"),
+        )
+        st.write(f"Endereços encontrados: {addresses}")
+
+        # Geração do documento
+        if st.button("Gerar Documento"):
+            info = {"nome": "Exemplo Nome", "cpf_cnpj": "123.456.789-00"}  # Ajuste conforme necessário
+            generate_docx(info, addresses)
+
 
 # ---------------------------
 # Função Principal
