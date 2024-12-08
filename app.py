@@ -314,6 +314,7 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
             adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
 
+
         # Corpo principal
             # Corpo principal
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
@@ -349,7 +350,17 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
         adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
         adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
         doc.add_paragraph("\n")  # Quebra de linha
+       
+        # Fechamento
+        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
+        advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
         
+        advogado_email = info.get('emails', ["[E-mail não informado]"])
+        advogado_email = advogado_email[0] if advogado_email else "[E-mail não informado]"
+        
+        adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
+        adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
+      
         # Salva o documento
         doc.save(output_path)
         print(f"Documento gerado com sucesso: {output_path}")
