@@ -139,15 +139,20 @@ def gerar_documento_docx(info, enderecos):
         str: Caminho do arquivo gerado.
     """
     try:
+        """# Define o número do processo
+        numero_processo = info.get("numero_processo", "100")  # Valor padrão se não encontrado"""
+        
         # Define o número do processo
         numero_processo = info.get("numero_processo", "100")  # Valor padrão se não encontrado
 
         # Diretório seguro para salvar arquivos
-        output_directory = os.path.join(os.getcwd(), "output")
+        base_dir = os.path.dirname(__file__)  # Diretório atual do script
+        output_directory = os.path.join(base_dir, "output")
         os.makedirs(output_directory, exist_ok=True)  # Garante que o diretório será criado
         
         # Caminho completo do arquivo
-        output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_100.docx")
+        output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
+        
         
         doc = Document()
 
