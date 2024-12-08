@@ -146,14 +146,14 @@ def gerar_documento_docx(info, enderecos):
         numero_processo = info.get("numero_processo", "100")  # Valor padrão se não encontrado
 
         # Diretório seguro para salvar arquivos
-        base_dir = os.path.dirname(__file__)  # Diretório atual do script
-        output_directory = os.path.join(base_dir, "output")
-        os.makedirs(output_directory, exist_ok=True)  # Garante que o diretório será criado
+        output_directory = "output"  # Diretório será criado na pasta atual do script
+        if not os.path.exists(output_directory):  # Verifica se o diretório já existe
+            os.makedirs(output_directory)  # Cria o diretório se necessário
         
         # Caminho completo do arquivo
         output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
         
-        
+        # Criação do documento
         doc = Document()
 
         doc.add_paragraph("\n")
@@ -220,18 +220,19 @@ def gerar_documento_docx(info, enderecos):
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
 
 
+        # Salva o documento
+        doc.save(output_path)
 
         # Botão de download no Streamlit
         with open(output_path, "rb") as file:
             st.download_button(
                 label="Baixar Documento",
                 data=file,
-                file_name=f"Notificacao_Processo_Nº_{process_number}.docx",
+                file_name=f"Notificacao_Processo_Nº_{numero_processo}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             )
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
-
 
 # ---------------------------
 # Interface Streamlit
