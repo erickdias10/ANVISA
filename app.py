@@ -155,24 +155,24 @@ def gerar_documento_docx(info, enderecos, numero_processo):
     """
     try:
         
-if uploaded_file:
-    try:
-        # Obtem o nome do arquivo enviado
-        file_name = uploaded_file.name
-
-        # Extrai o número do processo a partir do nome do arquivo
-        numero_processo = extract_process_number(file_name)
-
-        text = extract_text_with_pypdf2(uploaded_file)
-        if text:
-            st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
-            info = extract_information(text) or {}
-            addresses = extract_addresses(text) or []
-
-            if st.button("Gerar Documento"):
-                gerar_documento_docx(info, addresses, numero_processo)
-    except Exception as e:
-        st.error(f"Ocorreu um erro: {e}")
+    if uploaded_file:
+        try:
+            # Obtem o nome do arquivo enviado
+            file_name = uploaded_file.name
+    
+            # Extrai o número do processo a partir do nome do arquivo
+            numero_processo = extract_process_number(file_name)
+    
+            text = extract_text_with_pypdf2(uploaded_file)
+            if text:
+                st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
+                info = extract_information(text) or {}
+                addresses = extract_addresses(text) or []
+    
+                if st.button("Gerar Documento"):
+                    gerar_documento_docx(info, addresses, numero_processo)
+        except Exception as e:
+            st.error(f"Ocorreu um erro: {e}")
 
 
         # Diretório seguro para salvar arquivos
