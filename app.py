@@ -183,7 +183,7 @@ def gerar_documento_docx(info, enderecos, numero_processo):
         # Corpo principal
             # Corpo principal
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
-        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: ", negrito=True)
+        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
         doc.add_paragraph("\n")  # Quebra de linha
         adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
         doc.add_paragraph("\n")  # Quebra de linha
