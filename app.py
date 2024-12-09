@@ -253,13 +253,21 @@ uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
 
 if uploaded_file:
     try:
+        # Extrai o número do processo a partir do nome do arquivo
+        file_name = uploaded_file.name
+        numero_processo = extract_process_number(file_name)
+
+        # Extrai o texto do PDF
         text = extract_text_with_pypdf2(uploaded_file)
         if text:
-            st.success("Texto extraído com sucesso!")
+            st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
+            
+            # Extrai informações e endereços
             info = extract_information(text) or {}
             addresses = extract_addresses(text) or []
 
+            # Gera o documento ao clicar no botão
             if st.button("Gerar Documento"):
-                gerar_documento_docx(info, addresses)
+                gerar_documento_docx(info, addresses, numero_processo)
     except Exception as e:
         st.error(f"Ocorreu um erro: {e}")
