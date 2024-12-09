@@ -87,32 +87,25 @@ def extract_information(text):
     }
     return info
 
-def extract_addresses(text):
-    addresses = []
-    endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
-    cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
-    bairro_pattern = r"Bairro:\s*([\w\s]+)"
-    estado_pattern = r"Estado:\s*([A-Z]{2})"
-    cep_pattern = r"CEP:\s*(\d{2}\.\d{3}-\d{3}|\d{5}-\d{3})"
+def extract_addresses_with_model(text):
+    try:
+        addresses = predict_addresses_with_model(text, 
+                                                 vectorizer_path="vectorizer.pkl", 
+                                                 model_path="address_model.pkl")
+        return addresses
+    except Exception as e:
+        print(f"Erro ao usar o modelo de endereços: {e}")
+        return []
 
-    endereco_matches = re.findall(endereco_pattern, text)
-    cidade_matches = re.findall(cidade_pattern, text)
-    bairro_matches = re.findall(bairro_pattern, text)
-    estado_matches = re.findall(estado_pattern, text)
-    cep_matches = re.findall(cep_pattern, text)
-
-    for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
-        address = {
-            "endereco": endereco_matches[i].strip() if i < len(endereco_matches) else None,
-            "cidade": cidade_matches[i].strip() if i < len(cidade_matches) else None,
-            "bairro": bairro_matches[i].strip() if i < len(bairro_matches) else None,
-            "estado": estado_matches[i].strip() if i < len(estado_matches) else None,
-            "cep": cep_matches[i].strip() if i < len(cep_matches) else None
-        }
-        if any(address.values()):
-            addresses.append(address)
-
-    return addresses or []
+def extract_nome_email_with_model(text):
+    try:
+        nome_email = predict_Nome_Email_with_model(text, 
+                                                   vectorizer_path="vectorizer_Nome.pkl", 
+                                                   model_path="modelo_Nome.pkl")
+        return nome_email
+    except Exception as e:
+        print(f"Erro ao usar o modelo de nomes e e-mails: {e}")
+        return {}
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
@@ -262,9 +255,9 @@ if uploaded_file:
         if text:
             st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
             
-            # Extrai informações e endereços
-            info = extract_information(text) or {}
-            addresses = extract_addresses(text) or []
+            # Extrai informações e endereços usando os modelos treinados
+            info = extract_nome_email_with_model(text)
+            addresses = extract_addresses_with_model(text)
 
             # Gera o documento ao clicar no botão
             if st.button("Gerar Documento"):
