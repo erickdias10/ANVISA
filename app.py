@@ -121,13 +121,28 @@ def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     run.font.size = Pt(tamanho)
     return paragrafo
 
+def extract_process_number(file_name):
+    """
+    Extrai o número do processo a partir do nome do arquivo, removendo "SEI" e preservando o restante.
+
+    Args:
+        file_name (str): Nome do arquivo enviado.
+
+    Returns:
+        str: Número do processo extraído.
+    """
+    base_name = os.path.splitext(file_name)[0]  # Remove a extensão
+    if base_name.startswith("SEI"):
+        base_name = base_name[3:].strip()  # Remove "SEI"
+    return base_name
+
 # ---------------------------
 # Função de Geração de Documento
 # ---------------------------
-# ---------------------------
-# Função de Geração de Documento
-# ---------------------------
-def gerar_documento_docx(info, enderecos):
+
+
+def gerar_documento_docx(info, enderecos, numero_processo):
+
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
 
@@ -140,8 +155,25 @@ def gerar_documento_docx(info, enderecos):
     """
     try:
         
-        # Define o número do processo
-        numero_processo = info.get("numero_processo", "100")  # Valor padrão se não encontrado
+if uploaded_file:
+    try:
+        # Obtem o nome do arquivo enviado
+        file_name = uploaded_file.name
+
+        # Extrai o número do processo a partir do nome do arquivo
+        numero_processo = extract_process_number(file_name)
+
+        text = extract_text_with_pypdf2(uploaded_file)
+        if text:
+            st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
+            info = extract_information(text) or {}
+            addresses = extract_addresses(text) or []
+
+            if st.button("Gerar Documento"):
+                gerar_documento_docx(info, addresses, numero_processo)
+    except Exception as e:
+        st.error(f"Ocorreu um erro: {e}")
+
 
         # Diretório seguro para salvar arquivos
         output_directory = "output"  # Diretório será criado na pasta atual do script
@@ -149,7 +181,8 @@ def gerar_documento_docx(info, enderecos):
             os.makedirs(output_directory)  # Cria o diretório se necessário
         
         # Caminho completo do arquivo
-        output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
+        output_path = os.path.join("output", f"Notificacao_Processo_Nº_{numero_processo}.docx")
+
         
         # Criação do documento
         doc = Document()
