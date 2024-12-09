@@ -142,46 +142,25 @@ def extract_process_number(file_name):
 
 
 def gerar_documento_docx(info, enderecos, numero_processo):
-
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
 
     Args:
         info (dict): Dicionário com informações extraídas do texto.
         enderecos (list): Lista de dicionários contendo informações de endereços.
+        numero_processo (str): Número do processo extraído do nome do arquivo.
 
     Returns:
         str: Caminho do arquivo gerado.
     """
     try:
-        
-    if uploaded_file:
-        try:
-            # Obtem o nome do arquivo enviado
-            file_name = uploaded_file.name
-    
-            # Extrai o número do processo a partir do nome do arquivo
-            numero_processo = extract_process_number(file_name)
-    
-            text = extract_text_with_pypdf2(uploaded_file)
-            if text:
-                st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
-                info = extract_information(text) or {}
-                addresses = extract_addresses(text) or []
-    
-                if st.button("Gerar Documento"):
-                    gerar_documento_docx(info, addresses, numero_processo)
-        except Exception as e:
-            st.error(f"Ocorreu um erro: {e}")
-
-
         # Diretório seguro para salvar arquivos
-        output_directory = "output"  # Diretório será criado na pasta atual do script
-        if not os.path.exists(output_directory):  # Verifica se o diretório já existe
-            os.makedirs(output_directory)  # Cria o diretório se necessário
-        
+        output_directory = "output"
+        os.makedirs(output_directory, exist_ok=True)
+
         # Caminho completo do arquivo
-        output_path = os.path.join("output", f"Notificacao_Processo_Nº_{numero_processo}.docx")
+        output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
+
 
         
         # Criação do documento
