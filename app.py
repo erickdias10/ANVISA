@@ -1,23 +1,17 @@
-# ---------------------------
-# Importação de Bibliotecas
-# ---------------------------
 import re
-from PyPDF2 import PdfReader
+import os
 import unicodedata
+from PyPDF2 import PdfReader
 from docx import Document
 from docx.shared import Pt
-import os
 import joblib
 import streamlit as st
 
 # ---------------------------
-# Configurações do Caminho dos Arquivos
+# Modelo
 # ---------------------------
 VECTOR_PATH = r"C:\Users\erickd\OneDrive - Bem Promotora de Vendas e Servicos SA\Área de Trabalho\Projeto"
 
-# ---------------------------
-# Funções de Predição com Modelos
-# ---------------------------
 def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_path="address_model.pkl"):
     try:
         vectorizer = joblib.load(vectorizer_path)
@@ -123,9 +117,6 @@ def extract_addresses(text):
     return addresses or []
 
 def remove_duplicate_and_incomplete_addresses(addresses):
-    """
-    Remove endereços duplicados e mantém o mais completo.
-    """
     unique_addresses = []
     seen_addresses = set()
 
@@ -172,9 +163,6 @@ def remove_duplicate_and_incomplete_addresses(addresses):
 
     return unique_addresses
 
-# ---------------------------
-# Funções Auxiliares para Documentos
-# ---------------------------
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
@@ -183,27 +171,16 @@ def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     return paragrafo
 
 def extract_process_number(file_name):
-    """
-    Extrai o número do processo a partir do nome do arquivo, removendo "SEI" e preservando o restante.
-    """
-    base_name = os.path.splitext(file_name)[0]  # Remove a extensão
+    base_name = os.path.splitext(file_name)[0]
     if base_name.startswith("SEI"):
-        base_name = base_name[3:].strip()  # Remove "SEI"
+        base_name = base_name[3:].strip()
     return base_name
 
-# ---------------------------
-# Função de Geração de Documento DOCX
-# ---------------------------
 def gerar_documento_docx(info, enderecos, numero_processo):
-    """
-    Gera um documento DOCX com informações do processo e endereços extraídos.
-    """
     try:
         output_directory = "output"
         os.makedirs(output_directory, exist_ok=True)
-
         output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
-
         doc = Document()
 
         doc.add_paragraph("\n")
@@ -224,3 +201,37 @@ def gerar_documento_docx(info, enderecos, numero_processo):
     except Exception as e:
         print(f"Erro ao gerar documento: {e}")
         return None
+
+# ---------------------------
+# Função de Processamento do PDF e Integração com Streamlit
+# ---------------------------
+def processar_pdf(file):
+    texto_extraido = extract_text_with_pypdf2(file)
+    info_extraida = extract_information(texto_extraido)
+    enderecos = extract_addresses(texto_extraido)
+    numero_processo = extract_process_number(file.name)
+    docx_path = gerar_documento_docx(info_extraida, enderecos, numero_processo)
+    return docx_path
+
+# Interface Streamlit
+st.title("Sistema de Extração e Geração de Documentos")
+
+uploaded_file = st.file_uploader("Escolha um arquivo PDF", type=["pdf"])
+
+if uploaded_file is not None:
+    st.write(f"Arquivo '{uploaded_file.name}' carregado com sucesso!")
+
+    # Processar o arquivo PDF
+    docx_path = processar_pdf(uploaded_file)
+
+    # Se o documento foi gerado com sucesso, oferece para download
+    if docx_path:
+        with open(docx_path, "rb") as f:
+            st.download_button(
+                label="Baixar Documento Gerado",
+                data=f,
+                file_name=os.path.basename(docx_path),
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+    else:
+        st.write("Erro ao gerar o documento!")
