@@ -142,7 +142,7 @@ def remove_duplicate_and_incomplete_addresses(addresses):
                  if tuple(sorted((
                     str(a.get('endereco', '')),
                     str(a.get('cidade', '')),
-                    str(a.get('bairro', ''))),
+                    str(a.get('bairro', '')),
                     str(a.get('estado', '')),
                     str(a.get('cep', ''))
                 ))) == address_tuple), None
