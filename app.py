@@ -111,9 +111,7 @@ def extract_addresses(text):
         if address["endereco"] and address["endereco"].lower() != 'none':
             addresses.append(address)
 
-    # Filtra e mantém apenas o endereço mais completo em caso de repetição
     addresses = remove_duplicate_and_incomplete_addresses(addresses)
-    
     return addresses or []
 
 def remove_duplicate_and_incomplete_addresses(addresses):
@@ -135,7 +133,6 @@ def remove_duplicate_and_incomplete_addresses(addresses):
 
     return unique_addresses
 
-
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
@@ -148,36 +145,6 @@ def extract_process_number(file_name):
     if base_name.startswith("SEI"):
         base_name = base_name[3:].strip()
     return base_name
-
-def gerar_documento_docx(process_number, info, enderecos, output_path="Notificacao_Processo_Nº_{process_number}.docx"):
-    """
-    Gera um documento DOCX com informações do processo e endereços extraídos.
-
-    Args:
-        process_number (str): Número do processo administrativo.
-        info (dict): Dicionário com informações extraídas do texto.
-        enderecos (list): Lista de dicionários contendo informações de endereços.
-        output_path (str): Caminho para salvar o documento gerado.
-    """
-    try:
-        diretorio_downloads = os.path.expanduser("~/Downloads")
-        output_path = os.path.join(diretorio_downloads, f"Notificacao_Processo_Nº_{process_number}.docx")
-        
-        doc = Document()
-
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
-        doc.add_paragraph("\n")
-
-        # Adiciona endereços
-        for idx, endereco in enumerate(enderecos, start=1):
-            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-            doc.add_paragraph("\n")
 
         # Corpo principal
             # Corpo principal
@@ -240,7 +207,7 @@ def processar_pdf(file):
         if not numero_processo:
             raise ValueError("Número do processo não identificado no nome do arquivo.")
 
-        docx_path = gerar_documento_docx(info_extraida, enderecos, numero_processo)
+        docx_path = gerar_documento_docx(numero_processo, info_extraida, enderecos)
         return docx_path
     except Exception as e:
         st.error(f"Erro ao processar PDF: {e}")
