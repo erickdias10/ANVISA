@@ -78,10 +78,10 @@ def extract_information(text):
     email_pattern = r"(?:E-mail|Email):\s*([\w.-]+@[\w.-]+\.[a-z]{2,})"
 
     info = {
-        "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
-        "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
-        "socios_advogados": re.findall(socios_adv_pattern, text) or [],
-        "emails": re.findall(email_pattern, text) or [],
+        "nome_autuado": re.search(autuado_pattern, text).group(1).strip() if re.search(autuado_pattern, text) else None,
+        "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1).strip() if re.search(cnpj_cpf_pattern, text) else None,
+        "socios_advogados": [adv.strip() for adv in re.findall(socios_adv_pattern, text)] or [],
+        "emails": [email.strip() for email in re.findall(email_pattern, text)] or [],
     }
     return info
 
@@ -160,7 +160,7 @@ def gerar_documento_docx(info, enderecos, numero_processo):
         doc = Document()
 
         doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "[Ao(a) Senhor(a)")
+        adicionar_paragrafo(doc, "Ao(a) Senhor(a)")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
