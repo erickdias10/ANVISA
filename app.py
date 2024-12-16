@@ -11,10 +11,13 @@ import joblib
 import streamlit as st
 
 # ---------------------------
-# Modelo
+# Configurações do Caminho dos Arquivos
 # ---------------------------
 VECTOR_PATH = r"C:\Users\erickd\OneDrive - Bem Promotora de Vendas e Servicos SA\Área de Trabalho\Projeto"
 
+# ---------------------------
+# Funções de Predição com Modelos
+# ---------------------------
 def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_path="address_model.pkl"):
     try:
         vectorizer = joblib.load(vectorizer_path)
@@ -119,22 +122,14 @@ def extract_addresses(text):
     
     return addresses or []
 
-
 def remove_duplicate_and_incomplete_addresses(addresses):
     """
     Remove endereços duplicados e mantém o mais completo.
-
-    Args:
-        addresses (list): Lista de dicionários com os endereços extraídos.
-
-    Returns:
-        list: Lista filtrada de endereços, com duplicados removidos e apenas os mais completos.
     """
     unique_addresses = []
     seen_addresses = set()
 
     for address in addresses:
-        # Cria uma chave única com os valores que podem identificar um endereço
         address_tuple = tuple(sorted((
             address.get('endereco', ''),
             address.get('cidade', ''),
@@ -143,12 +138,10 @@ def remove_duplicate_and_incomplete_addresses(addresses):
             address.get('cep', '')
         )))
 
-        # Verifica se o endereço já foi visto
         if address_tuple not in seen_addresses:
             seen_addresses.add(address_tuple)
             unique_addresses.append(address)
         else:
-            # Caso já exista um endereço duplicado, escolhe o mais completo
             existing_address = next(
                 (a for a in unique_addresses 
                  if tuple(sorted((
@@ -161,7 +154,6 @@ def remove_duplicate_and_incomplete_addresses(addresses):
             )
 
             if existing_address:
-                # Substitui o endereço existente pelo mais completo
                 if len(address.get('endereco', '')) > len(existing_address.get('endereco', '')): 
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
@@ -180,7 +172,9 @@ def remove_duplicate_and_incomplete_addresses(addresses):
 
     return unique_addresses
 
-
+# ---------------------------
+# Funções Auxiliares para Documentos
+# ---------------------------
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
@@ -191,12 +185,6 @@ def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
 def extract_process_number(file_name):
     """
     Extrai o número do processo a partir do nome do arquivo, removendo "SEI" e preservando o restante.
-
-    Args:
-        file_name (str): Nome do arquivo enviado.
-
-    Returns:
-        str: Número do processo extraído.
     """
     base_name = os.path.splitext(file_name)[0]  # Remove a extensão
     if base_name.startswith("SEI"):
@@ -204,29 +192,18 @@ def extract_process_number(file_name):
     return base_name
 
 # ---------------------------
-# Função de Geração de Documento
+# Função de Geração de Documento DOCX
 # ---------------------------
 def gerar_documento_docx(info, enderecos, numero_processo):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
-
-    Args:
-        info (dict): Dicionário com informações extraídas do texto.
-        enderecos (list): Lista de dicionários contendo informações de endereços.
-        numero_processo (str): Número do processo extraído do nome do arquivo.
-
-    Returns:
-        str: Caminho do arquivo gerado.
     """
     try:
-        # Diretório seguro para salvar arquivos
         output_directory = "output"
         os.makedirs(output_directory, exist_ok=True)
 
-        # Caminho completo do arquivo
         output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
 
-        # Criação do documento
         doc = Document()
 
         doc.add_paragraph("\n")
@@ -234,7 +211,6 @@ def gerar_documento_docx(info, enderecos, numero_processo):
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
-        # Adiciona endereços
         for idx, endereco in enumerate(enderecos, start=1):
             adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
@@ -243,7 +219,6 @@ def gerar_documento_docx(info, enderecos, numero_processo):
             adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
 
-        # Salva o arquivo gerado
         doc.save(output_path)
         return output_path
     except Exception as e:
