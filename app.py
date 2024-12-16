@@ -121,14 +121,15 @@ def remove_duplicate_and_incomplete_addresses(addresses):
     seen_addresses = set()
 
     for address in addresses:
-        # Substituir None por uma string vazia
-        address_tuple = tuple(sorted((
-            address.get('endereco', ''),
-            address.get('cidade', ''),
-            address.get('bairro', ''),
-            address.get('estado', ''),
-            address.get('cep', '')
-        )))
+        # Garantir que todos os campos sejam strings e não None
+        endereco = str(address.get('endereco', ''))
+        cidade = str(address.get('cidade', ''))
+        bairro = str(address.get('bairro', ''))
+        estado = str(address.get('estado', ''))
+        cep = str(address.get('cep', ''))
+
+        # Criação do tuple com os dados, substituindo None por string vazia
+        address_tuple = tuple(sorted((endereco, cidade, bairro, estado, cep)))
 
         # Verifica se o endereço já foi visto antes
         if address_tuple not in seen_addresses:
@@ -139,33 +140,34 @@ def remove_duplicate_and_incomplete_addresses(addresses):
             existing_address = next(
                 (a for a in unique_addresses 
                  if tuple(sorted((
-                    a.get('endereco', ''),
-                    a.get('cidade', ''),
-                    a.get('bairro', ''),
-                    a.get('estado', ''),
-                    a.get('cep', '')
+                    str(a.get('endereco', '')),
+                    str(a.get('cidade', '')),
+                    str(a.get('bairro', '')),
+                    str(a.get('estado', '')),
+                    str(a.get('cep', ''))
                 ))) == address_tuple), None
             )
 
             # Substituição com base no comprimento dos dados
             if existing_address:
-                if len(address.get('endereco', '')) > len(existing_address.get('endereco', '')): 
+                if len(endereco) > len(existing_address.get('endereco', '')): 
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
-                elif len(address.get('cidade', '')) > len(existing_address.get('cidade', '')):
+                elif len(cidade) > len(existing_address.get('cidade', '')):
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
-                elif len(address.get('bairro', '')) > len(existing_address.get('bairro', '')):
+                elif len(bairro) > len(existing_address.get('bairro', '')):
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
-                elif len(address.get('estado', '')) > len(existing_address.get('estado', '')):
+                elif len(estado) > len(existing_address.get('estado', '')):
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
-                elif len(address.get('cep', '')) > len(existing_address.get('cep', '')):
+                elif len(cep) > len(existing_address.get('cep', '')):
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
 
     return unique_addresses
+
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
