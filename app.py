@@ -148,8 +148,9 @@ def remove_duplicate_and_incomplete_addresses(addresses):
                 ))) == address_tuple), None
             )
 
-            # Substituição com base no comprimento dos dados
-            if existing_address:
+            # Verificar se a variável existing_address é um dicionário válido
+            if existing_address and isinstance(existing_address, dict):
+                # Substituição com base no comprimento dos dados
                 if len(endereco) > len(existing_address.get('endereco', '')): 
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
