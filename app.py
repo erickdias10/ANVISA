@@ -135,8 +135,13 @@ def remove_duplicate_and_incomplete_addresses(addresses):
 
     for address in addresses:
         # Cria uma chave única com os valores que podem identificar um endereço
-        address_tuple = tuple(sorted((address.get('endereco', ''), address.get('cidade', ''), 
-                                      address.get('bairro', ''), address.get('estado', ''), address.get('cep', ''))))
+        address_tuple = tuple(sorted((
+            address.get('endereco', ''),
+            address.get('cidade', ''),
+            address.get('bairro', ''),
+            address.get('estado', ''),
+            address.get('cep', '')
+        )))
 
         # Verifica se o endereço já foi visto
         if address_tuple not in seen_addresses:
@@ -146,9 +151,13 @@ def remove_duplicate_and_incomplete_addresses(addresses):
             # Caso já exista um endereço duplicado, escolhe o mais completo
             existing_address = next(
                 (a for a in unique_addresses 
-                 if tuple(sorted((a.get('endereco', ''), a.get('cidade', ''), 
-                                  a.get('bairro', ''), a.get('estado', ''), 
-                                  a.get('cep', '')))) == address_tuple), None)
+                 if tuple(sorted((
+                    a.get('endereco', ''),
+                    a.get('cidade', ''),
+                    a.get('bairro', ''),
+                    a.get('estado', ''),
+                    a.get('cep', '')
+                ))) == address_tuple), None
             )
 
             if existing_address:
@@ -170,6 +179,7 @@ def remove_duplicate_and_incomplete_addresses(addresses):
                     unique_addresses.append(address)
 
     return unique_addresses
+
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
