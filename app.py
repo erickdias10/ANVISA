@@ -247,40 +247,55 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
 # ---------------------------
 # Função de Processamento do PDF e Integração com Streamlit
 # ---------------------------
-def processar_pdf(file):
+# ---------------------------
+# Função de Processamento do PDF e Integração com Streamlit
+# ---------------------------
+def processar_pdf(file, numero_processo):
     try:
         # Extrair texto do arquivo PDF
         texto_extraido = extract_text_with_pypdf2(file)
         if not texto_extraido:
-            raise ValueError("Nenhum texto extraído do arquivo PDF.")
+            st.write("Erro: Nenhum texto foi extraído do PDF.")
+            return None
 
         # Extrair informações do texto
         info_extraida = extract_information(texto_extraido)
+        if not info_extraida.get("nome_autuado"):
+            st.write("Aviso: Nome do autuado não encontrado no texto extraído.")
+
+        # Extrair endereços
         enderecos = extract_addresses(texto_extraido)
-
-        # Extrair o número do processo a partir do nome do arquivo
-        numero_processo = extract_process_number(file.name)
-
-        if not numero_processo:
-            raise ValueError("Número do processo não encontrado no nome do arquivo.")
+        if not enderecos:
+            st.write("Aviso: Nenhum endereço válido encontrado no texto extraído.")
 
         # Gerar o documento DOCX
         docx_path = gerar_documento_docx(numero_processo, info_extraida, enderecos)
+        if not docx_path:
+            st.write("Erro: Não foi possível gerar o documento DOCX.")
+            return None
+
         return docx_path
     except Exception as e:
         st.write(f"Erro ao processar o PDF: {e}")
         return None
 
+# ---------------------------
 # Interface Streamlit
+# ---------------------------
 st.title("Sistema de Extração e Geração de Documentos")
 
 uploaded_file = st.file_uploader("Escolha um arquivo PDF", type=["pdf"])
+numero_processo = st.text_input("Digite o número do processo (opcional):")
 
 if uploaded_file is not None:
     st.write(f"Arquivo '{uploaded_file.name}' carregado com sucesso!")
 
+    if not numero_processo:
+        numero_processo = extract_process_number(uploaded_file.name)
+        st.write(f"Número do processo extraído automaticamente: {numero_processo}")
+
     # Processar o arquivo PDF
-    docx_path = processar_pdf(uploaded_file)
+    docx_path = processar_pdf(uploaded_file, numero_processo)
 
     # Se o documento foi gerado com sucesso, oferece para download
     if docx_path:
@@ -294,4 +309,3 @@ if uploaded_file is not None:
     else:
         st.write("Erro ao gerar o documento!")
 
-    
