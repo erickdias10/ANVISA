@@ -244,13 +244,32 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
 # ---------------------------
 # Função de Processamento do PDF e Integração com Streamlit
 # ---------------------------
+# ---------------------------
+# Função de Processamento do PDF e Integração com Streamlit
+# ---------------------------
 def processar_pdf(file):
-    texto_extraido = extract_text_with_pypdf2(file)
-    info_extraida = extract_information(texto_extraido)
-    enderecos = extract_addresses(texto_extraido)
-    numero_processo = extract_process_number(file.name)
-    docx_path = gerar_documento_docx(info_extraida, enderecos, numero_processo)
-    return docx_path
+    try:
+        # Extrair texto do arquivo PDF
+        texto_extraido = extract_text_with_pypdf2(file)
+        if not texto_extraido:
+            raise ValueError("Nenhum texto extraído do arquivo PDF.")
+
+        # Extrair informações do texto
+        info_extraida = extract_information(texto_extraido)
+        enderecos = extract_addresses(texto_extraido)
+
+        # Extrair o número do processo a partir do nome do arquivo
+        numero_processo = extract_process_number(file.name)
+
+        if not numero_processo:
+            raise ValueError("Número do processo não encontrado no nome do arquivo.")
+
+        # Gerar o documento DOCX
+        docx_path = gerar_documento_docx(numero_processo, info_extraida, enderecos)
+        return docx_path
+    except Exception as e:
+        st.write(f"Erro ao processar o PDF: {e}")
+        return None
 
 # Interface Streamlit
 st.title("Sistema de Extração e Geração de Documentos")
@@ -274,4 +293,5 @@ if uploaded_file is not None:
             )
     else:
         st.write("Erro ao gerar o documento!")
+
     
