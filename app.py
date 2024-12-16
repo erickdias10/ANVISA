@@ -10,7 +10,7 @@ import streamlit as st
 # ---------------------------
 # Modelo
 # ---------------------------
-VECTOR_PATH = r"C:\Users\erickd\OneDrive - Bem Promotora de Vendas e Servicos SA\Área de Trabalho\Projeto"
+VECTOR_PATH = r"C:\\Users\\erickd\\OneDrive - Bem Promotora de Vendas e Servicos SA\\Área de Trabalho\\Projeto"
 
 def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_path="address_model.pkl"):
     try:
@@ -108,7 +108,7 @@ def extract_addresses(text):
         }
 
         # Filtra endereços com valor 'None' ou 'none'
-        if any(value and value.lower() != 'none' for value in address.values()):
+        if address["endereco"] and address["endereco"].lower() != 'none':
             addresses.append(address)
 
     # Filtra e mantém apenas o endereço mais completo em caso de repetição
@@ -121,61 +121,21 @@ def remove_duplicate_and_incomplete_addresses(addresses):
     seen_addresses = set()
 
     for address in addresses:
-        # Garantir que todos os campos sejam strings e não None
-        endereco = str(address.get('endereco', ''))
-        cidade = str(address.get('cidade', ''))
-        bairro = str(address.get('bairro', ''))
-        estado = str(address.get('estado', ''))
-        cep = str(address.get('cep', ''))
-
         # Criação do tuple com os dados, substituindo None por string vazia
-        address_tuple = tuple(sorted((endereco, cidade, bairro, estado, cep)))
+        address_tuple = tuple(sorted((
+            address.get('endereco', '').lower(),
+            address.get('cidade', '').lower(),
+            address.get('bairro', '').lower(),
+            address.get('estado', '').lower(),
+            address.get('cep', '').lower()
+        )))
 
         # Verifica se o endereço já foi visto antes
         if address_tuple not in seen_addresses:
             seen_addresses.add(address_tuple)
             unique_addresses.append(address)
-        else:
-            # Verificar se o endereço já existe e, se for o caso, substituí-lo
-            existing_address = next(
-                (a for a in unique_addresses 
-                 if tuple(sorted((
-                    str(a.get('endereco', '')),
-                    str(a.get('cidade', '')),
-                    str(a.get('bairro', '')),
-                    str(a.get('estado', '')),
-                    str(a.get('cep', ''))
-                ))) == address_tuple), None
-            )
-
-            # Verificar se existing_address é válido e é um dicionário
-            if existing_address and isinstance(existing_address, dict):
-                # Garantir que estamos lidando com valores válidos para comparação
-                existing_endereco = str(existing_address.get('endereco', ''))
-                existing_cidade = str(existing_address.get('cidade', ''))
-                existing_bairro = str(existing_address.get('bairro', ''))
-                existing_estado = str(existing_address.get('estado', ''))
-                existing_cep = str(existing_address.get('cep', ''))
-
-                # Substituição com base no comprimento dos dados
-                if len(endereco) > len(existing_endereco): 
-                    unique_addresses.remove(existing_address)
-                    unique_addresses.append(address)
-                elif len(cidade) > len(existing_cidade):
-                    unique_addresses.remove(existing_address)
-                    unique_addresses.append(address)
-                elif len(bairro) > len(existing_bairro):
-                    unique_addresses.remove(existing_address)
-                    unique_addresses.append(address)
-                elif len(estado) > len(existing_estado):
-                    unique_addresses.remove(existing_address)
-                    unique_addresses.append(address)
-                elif len(cep) > len(existing_cep):
-                    unique_addresses.remove(existing_address)
-                    unique_addresses.append(address)
 
     return unique_addresses
-
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
