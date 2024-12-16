@@ -107,7 +107,6 @@ def extract_addresses(text):
             "cep": cep_matches[i].strip() if i < len(cep_matches) else None
         }
 
-        # Filtra endereços com valor 'None' ou 'none'
         if address["endereco"] and address["endereco"].lower() != 'none':
             addresses.append(address)
 
@@ -146,7 +145,25 @@ def extract_process_number(file_name):
         base_name = base_name[3:].strip()
     return base_name
 
-        # Corpo principal
+def gerar_documento_docx(process_number, info, enderecos):
+    try:
+        diretorio_downloads = os.path.expanduser("~/Downloads")
+        output_path = os.path.join(diretorio_downloads, f"Notificacao_Processo_Nº_{process_number}.docx")
+        doc = Document()
+
+        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
+        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+        doc.add_paragraph("\n")
+
+        for idx, endereco in enumerate(enderecos, start=1):
+            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
+            doc.add_paragraph("\n")
+
+                # Corpo principal
             # Corpo principal
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
         adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {process_number}", negrito=True)
@@ -181,6 +198,12 @@ def extract_process_number(file_name):
         adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
         adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
         doc.add_paragraph("\n")  # Quebra de linha
+
+        doc.save(output_path)
+        return output_path
+    except Exception as e:
+        print(f"Erro ao gerar documento: {e}")
+        return None
 
 # ---------------------------
 # Função de Processamento do PDF e Integração com Streamlit
