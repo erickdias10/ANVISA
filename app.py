@@ -60,18 +60,26 @@ def extract_text_with_pypdf2(pdf_path):
         reader = PdfReader(pdf_path)
         text = ""
         for page_number, page in enumerate(reader.pages, start=1):
-            extracted_text = page.extract_text() or ""
+            extracted_text = page.extract_text()
+            if not extracted_text:  # Verificar páginas sem texto
+                print(f"Página {page_number} está vazia ou não pôde ser extraída.")
+                continue
             text += f"\n[Documento: {os.path.basename(pdf_path)}, Página: {page_number}]\n" + extracted_text
         text = corrigir_texto(normalize_text(text))
+        print("Texto extraído do PDF:\n", text)  # Log do texto completo
         return text.strip()
     except Exception as e:
         print(f"Erro ao processar PDF {pdf_path}: {e}")
         return ''
 
+
 # ---------------------------
 # Funções de Extração de Dados
 # ---------------------------
 def extract_information(text):
+    # Log do texto recebido
+    print("Texto para extração de informações:\n", text)
+    
     autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
     cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
     socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
@@ -83,7 +91,10 @@ def extract_information(text):
         "socios_advogados": [adv.strip() for adv in re.findall(socios_adv_pattern, text)] or [],
         "emails": [email.strip() for email in re.findall(email_pattern, text)] or [],
     }
+    # Log das informações extraídas
+    print("Informações extraídas:", info)
     return info
+
 
 def extract_addresses(text):
     addresses = []
