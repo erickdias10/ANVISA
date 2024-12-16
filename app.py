@@ -121,14 +121,15 @@ def remove_duplicate_and_incomplete_addresses(addresses):
     seen_addresses = set()
 
     for address in addresses:
-        # Criação do tuple com os dados, substituindo None por string vazia
-        address_tuple = tuple(sorted((
-            address.get('endereco', '').lower(),
-            address.get('cidade', '').lower(),
-            address.get('bairro', '').lower(),
-            address.get('estado', '').lower(),
-            address.get('cep', '').lower()
-        )))
+        # Garantir que os valores sejam strings antes de chamar .lower()
+        endereco = str(address.get('endereco', '')).lower()
+        cidade = str(address.get('cidade', '')).lower()
+        bairro = str(address.get('bairro', '')).lower()
+        estado = str(address.get('estado', '')).lower()
+        cep = str(address.get('cep', '')).lower()
+
+        # Criar um tuple para verificação de duplicados
+        address_tuple = (endereco, cidade, bairro, estado, cep)
 
         # Verifica se o endereço já foi visto antes
         if address_tuple not in seen_addresses:
@@ -136,6 +137,7 @@ def remove_duplicate_and_incomplete_addresses(addresses):
             unique_addresses.append(address)
 
     return unique_addresses
+
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
