@@ -59,8 +59,9 @@ def extract_text_with_pypdf2(pdf_path):
     try:
         reader = PdfReader(pdf_path)
         text = ""
-        for page in reader.pages:
-            text += page.extract_text() or ""
+        for page_number, page in enumerate(reader.pages, start=1):
+            extracted_text = page.extract_text() or ""
+            text += f"\n[Documento: {os.path.basename(pdf_path)}, Página: {page_number}]\n" + extracted_text
         text = corrigir_texto(normalize_text(text))
         return text.strip()
     except Exception as e:
@@ -138,7 +139,6 @@ def remove_duplicate_and_incomplete_addresses(addresses):
 
     return unique_addresses
 
-
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
@@ -160,7 +160,7 @@ def gerar_documento_docx(info, enderecos, numero_processo):
         doc = Document()
 
         doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
+        adicionar_paragrafo(doc, "[Ao(a) Senhor(a)")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
