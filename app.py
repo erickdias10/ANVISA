@@ -144,8 +144,11 @@ def remove_duplicate_and_incomplete_addresses(addresses):
             unique_addresses.append(address)
         else:
             # Caso já exista um endereço duplicado, escolhe o mais completo
-            existing_address = next((a for a in unique_addresses if tuple(sorted((a.get('endereco', ''), a.get('cidade', ''), 
-                                                                            a.get('bairro', ''), a.get('estado', ''), a.get('cep', '')))) == address_tuple), None))
+            existing_address = next((a for a in unique_addresses if tuple(sorted((a.get('endereco', ''), 
+                                                                               a.get('cidade', ''), 
+                                                                               a.get('bairro', ''), 
+                                                                               a.get('estado', ''), 
+                                                                               a.get('cep', '')))) == address_tuple), None))
             
             if existing_address:
                 # Substitui o endereço existente pelo mais completo
@@ -166,6 +169,7 @@ def remove_duplicate_and_incomplete_addresses(addresses):
                     unique_addresses.append(address)
 
     return unique_addresses
+
 
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
