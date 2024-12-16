@@ -121,6 +121,7 @@ def remove_duplicate_and_incomplete_addresses(addresses):
     seen_addresses = set()
 
     for address in addresses:
+        # Substituir None por uma string vazia
         address_tuple = tuple(sorted((
             address.get('endereco', ''),
             address.get('cidade', ''),
@@ -129,10 +130,12 @@ def remove_duplicate_and_incomplete_addresses(addresses):
             address.get('cep', '')
         )))
 
+        # Verifica se o endereço já foi visto antes
         if address_tuple not in seen_addresses:
             seen_addresses.add(address_tuple)
             unique_addresses.append(address)
         else:
+            # Verificar se o endereço já existe e, se for o caso, substituí-lo
             existing_address = next(
                 (a for a in unique_addresses 
                  if tuple(sorted((
@@ -144,6 +147,7 @@ def remove_duplicate_and_incomplete_addresses(addresses):
                 ))) == address_tuple), None
             )
 
+            # Substituição com base no comprimento dos dados
             if existing_address:
                 if len(address.get('endereco', '')) > len(existing_address.get('endereco', '')): 
                     unique_addresses.remove(existing_address)
