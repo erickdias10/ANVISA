@@ -148,22 +148,29 @@ def remove_duplicate_and_incomplete_addresses(addresses):
                 ))) == address_tuple), None
             )
 
-            # Verificar se a variável existing_address é um dicionário válido
+            # Verificar se existing_address é válido e é um dicionário
             if existing_address and isinstance(existing_address, dict):
+                # Garantir que estamos lidando com valores válidos para comparação
+                existing_endereco = str(existing_address.get('endereco', ''))
+                existing_cidade = str(existing_address.get('cidade', ''))
+                existing_bairro = str(existing_address.get('bairro', ''))
+                existing_estado = str(existing_address.get('estado', ''))
+                existing_cep = str(existing_address.get('cep', ''))
+
                 # Substituição com base no comprimento dos dados
-                if len(endereco) > len(existing_address.get('endereco', '')): 
+                if len(endereco) > len(existing_endereco): 
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
-                elif len(cidade) > len(existing_address.get('cidade', '')):
+                elif len(cidade) > len(existing_cidade):
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
-                elif len(bairro) > len(existing_address.get('bairro', '')):
+                elif len(bairro) > len(existing_bairro):
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
-                elif len(estado) > len(existing_address.get('estado', '')):
+                elif len(estado) > len(existing_estado):
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
-                elif len(cep) > len(existing_address.get('cep', '')):
+                elif len(cep) > len(existing_cep):
                     unique_addresses.remove(existing_address)
                     unique_addresses.append(address)
 
