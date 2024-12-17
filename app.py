@@ -55,7 +55,24 @@ def extract_information(text):
 
 def extract_addresses(text):
     endereco_pattern = r"(?:Endereço|Endereco):\s*([\w\s.,ºª-]+)"
-    return re.findall(endereco_pattern, text)
+    enderecos_encontrados = re.findall(endereco_pattern, text)
+    return [{"endereco": end.strip()} for end in enderecos_encontrados]
+
+def processar_pdf(uploaded_file):
+    texto = extract_text_with_pypdf2(uploaded_file)
+    if not texto:
+        st.error("O PDF está vazio ou o texto não pode ser extraído.")
+        return None
+
+    info = extract_information(texto) or {"nome_autuado": "[Não informado]", "cnpj_cpf": "[Não informado]"}
+    enderecos = extract_addresses(texto) or [{"endereco": "[Endereço não encontrado]"}]
+
+    process_number = os.path.splitext(uploaded_file.name)[0]
+    if not process_number:
+        process_number = "Desconhecido"
+
+    return gerar_documento_docx(process_number, info, enderecos)
+
 
 # ---------------------------
 # Criação do Documento DOCX
