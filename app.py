@@ -144,18 +144,30 @@ def gerar_documento_docx(process_number, info, enderecos):
 # ---------------------------
 def processar_pdf(uploaded_file):
     texto = extract_text_with_fallback(uploaded_file)
-    if not texto:
-        st.error("O PDF está vazio ou o texto não pôde ser extraído, nem via OCR.")
+    if not texto or texto.isspace():
+        st.error("Nenhum texto foi extraído do PDF. O arquivo pode estar corrompido ou baseado em imagem.")
         return None
 
+    # Log para depuração
+    st.write("Texto extraído (pré-processado):")
+    st.code(texto[:1000])  # Mostra os primeiros 1000 caracteres
+
+    # Extração de informações
     info = extract_information(texto) or {"nome_autuado": "[Não informado]", "cnpj_cpf": "[Não informado]"}
     enderecos = extract_addresses(texto) or [{"endereco": "[Endereço não encontrado]"}]
 
-    process_number = os.path.splitext(uploaded_file.name)[0]
-    if not process_number:
-        process_number = "Desconhecido"
+    # Gerar nome do processo
+    process_number = get_process_number(uploaded_file)
+    st.write(f"Número do processo: {process_number}")
 
-    return gerar_documento_docx(process_number, info, enderecos)
+    # Geração do documento
+    docx_path = gerar_documento_docx(process_number, info, enderecos)
+    if docx_path:
+        return docx_path
+    else:
+        st.error("Falha ao gerar o documento. Verifique os dados extraídos.")
+        return None
+
 
 # ---------------------------
 # Interface Streamlit
