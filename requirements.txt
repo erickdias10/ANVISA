@@ -3,3 +3,6 @@ python-docx
 pyautogui
 joblib
 streamlit
+pytesseract
+pdf2image
+Pillow
