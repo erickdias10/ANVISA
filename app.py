@@ -4,8 +4,9 @@ import unicodedata
 from PyPDF2 import PdfReader
 from docx import Document
 from docx.shared import Pt
-import joblib
 import streamlit as st
+from pdf2image import convert_from_bytes
+import pytesseract
 
 # ---------------------------
 # Funções de Tratamento de Texto
@@ -40,6 +41,24 @@ def extract_text_with_pypdf2(pdf_file):
         st.error(f"Erro ao extrair texto do PDF: {e}")
         return ""
 
+def extract_text_with_ocr(pdf_file):
+    try:
+        images = convert_from_bytes(pdf_file.read())
+        text = ""
+        for image in images:
+            text += pytesseract.image_to_string(image)
+        return corrigir_texto(normalize_text(text))
+    except Exception as e:
+        st.error(f"Erro ao realizar OCR no PDF: {e}")
+        return ""
+
+def extract_text_with_fallback(pdf_file):
+    text = extract_text_with_pypdf2(pdf_file)
+    if not text:
+        st.warning("Tentando extração via OCR, pois o PDF parece não conter texto extraível.")
+        text = extract_text_with_ocr(pdf_file)
+    return text
+
 # ---------------------------
 # Extração de Informações
 # ---------------------------
@@ -57,22 +76,6 @@ def extract_addresses(text):
     endereco_pattern = r"(?:Endereço|Endereco):\s*([\w\s.,ºª-]+)"
     enderecos_encontrados = re.findall(endereco_pattern, text)
     return [{"endereco": end.strip()} for end in enderecos_encontrados]
-
-def processar_pdf(uploaded_file):
-    texto = extract_text_with_pypdf2(uploaded_file)
-    if not texto:
-        st.error("O PDF está vazio ou o texto não pode ser extraído.")
-        return None
-
-    info = extract_information(texto) or {"nome_autuado": "[Não informado]", "cnpj_cpf": "[Não informado]"}
-    enderecos = extract_addresses(texto) or [{"endereco": "[Endereço não encontrado]"}]
-
-    process_number = os.path.splitext(uploaded_file.name)[0]
-    if not process_number:
-        process_number = "Desconhecido"
-
-    return gerar_documento_docx(process_number, info, enderecos)
-
 
 # ---------------------------
 # Criação do Documento DOCX
@@ -136,18 +139,17 @@ def gerar_documento_docx(process_number, info, enderecos):
     except Exception as e:
         print(f"Erro ao gerar documento: {e}")
         return None
-
 # ---------------------------
-# Função Principal
+# Processamento do PDF
 # ---------------------------
 def processar_pdf(uploaded_file):
-    texto = extract_text_with_pypdf2(uploaded_file)
+    texto = extract_text_with_fallback(uploaded_file)
     if not texto:
-        st.error("O PDF está vazio ou o texto não pode ser extraído.")
+        st.error("O PDF está vazio ou o texto não pôde ser extraído, nem via OCR.")
         return None
 
-    info = extract_information(texto)
-    enderecos = extract_addresses(texto)
+    info = extract_information(texto) or {"nome_autuado": "[Não informado]", "cnpj_cpf": "[Não informado]"}
+    enderecos = extract_addresses(texto) or [{"endereco": "[Endereço não encontrado]"}]
 
     process_number = os.path.splitext(uploaded_file.name)[0]
     if not process_number:
