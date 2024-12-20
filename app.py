@@ -86,9 +86,19 @@ def extract_information(text):
     return info
 
 def extract_addresses(text):
-    endereco_pattern = r"(?:Endereço|Endereco):\s*([\w\s.,ºª-]+)"
-    enderecos_encontrados = re.findall(endereco_pattern, text)
-    return [{"endereco": end.strip()} for end in enderecos_encontrados]
+    endereco_pattern = (
+        r"Endereço[:]? (.*?)\\n.*?CEP[:]? (\d{5}-\d{3}).*?Cidade[:]? ([\\w\\s]+).*?Estado[:]? ([A-Z]{2})"
+    )
+    matches = re.finditer(endereco_pattern, text, re.DOTALL)
+    enderecos = []
+    for match in matches:
+        enderecos.append({
+            "endereco": match.group(1).strip(),
+            "cep": match.group(2),
+            "cidade": match.group(3).strip(),
+            "estado": match.group(4)
+        })
+    return enderecos if enderecos else [{"endereco": "[Endereço não encontrado]"}]
 
 # ---------------------------
 # Criação do Documento DOCX
@@ -112,10 +122,9 @@ def gerar_documento_docx(process_number, info, enderecos):
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
-        for idx, endereco in enumerate(enderecos, start=1):
+        for endereco in enderecos:
             adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
             adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
@@ -159,7 +168,7 @@ def gerar_documento_docx(process_number, info, enderecos):
         doc.save(output_path)
         return output_path
     except Exception as e:
-        print(f"Erro ao gerar documento: {e}")
+        st.error(f"Erro ao gerar documento: {e}")
         return None
 # ---------------------------
 # Processamento do PDF
