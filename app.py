@@ -59,6 +59,19 @@ def extract_text_with_fallback(pdf_file):
         text = extract_text_with_ocr(pdf_file)
     return text
 
+def get_process_number(uploaded_file):
+    """
+    Extrai o número do processo de um texto no formato específico.
+    """
+    texto = extract_text_with_fallback(uploaded_file)
+    # Ajustar a expressão regular para o formato esperado do número de processo
+    process_number_pattern = r"Processo Administrativo Sancionador nº (\d+)"
+    match = re.search(process_number_pattern, texto)
+    if match:
+        return match.group(1)
+    else:
+        return "[Número de processo não encontrado]"
+
 # ---------------------------
 # Extração de Informações
 # ---------------------------
