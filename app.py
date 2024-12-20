@@ -46,7 +46,7 @@ def extract_text_with_ocr(pdf_file):
         images = convert_from_bytes(pdf_file.read())
         text = ""
         for image in images:
-            text += pytesseract.image_to_string(image)
+            text += pytesseract.image_to_string(image, lang='por')
         return corrigir_texto(normalize_text(text))
     except Exception as e:
         st.error(f"Erro ao realizar OCR no PDF: {e}")
@@ -65,7 +65,7 @@ def get_process_number(uploaded_file):
     """
     texto = extract_text_with_fallback(uploaded_file)
     # Ajustar a expressão regular para o formato esperado do número de processo
-    process_number_pattern = r"Processo Administrativo Sancionador nº (\d+)"
+    process_number_pattern = r"Processo(?: Administrativo Sancionador)?[^\d]*?n[ºo]:? (\d+)"
     match = re.search(process_number_pattern, texto)
     if match:
         return match.group(1)
@@ -89,6 +89,15 @@ def extract_addresses(text):
     endereco_pattern = r"(?:Endereço|Endereco):\s*([\w\s.,ºª-]+)"
     enderecos_encontrados = re.findall(endereco_pattern, text)
     return [{"endereco": end.strip()} for end in enderecos_encontrados]
+
+# ---------------------------
+# Criação do Documento DOCX
+# ---------------------------
+def adicionar_paragrafo(doc, texto, negrito=False):
+    paragrafo = doc.add_paragraph()
+    run = paragrafo.add_run(texto)
+    run.bold = negrito
+    run.font.size = Pt(12)
 
 # ---------------------------
 # Criação do Documento DOCX
@@ -161,26 +170,21 @@ def processar_pdf(uploaded_file):
         st.error("Nenhum texto foi extraído do PDF. O arquivo pode estar corrompido ou baseado em imagem.")
         return None
 
-    # Log para depuração
     st.write("Texto extraído (pré-processado):")
-    st.code(texto[:1000])  # Mostra os primeiros 1000 caracteres
+    st.code(texto[:1000])
 
-    # Extração de informações
     info = extract_information(texto) or {"nome_autuado": "[Não informado]", "cnpj_cpf": "[Não informado]"}
     enderecos = extract_addresses(texto) or [{"endereco": "[Endereço não encontrado]"}]
 
-    # Gerar nome do processo
     process_number = get_process_number(uploaded_file)
     st.write(f"Número do processo: {process_number}")
 
-    # Geração do documento
     docx_path = gerar_documento_docx(process_number, info, enderecos)
     if docx_path:
         return docx_path
     else:
         st.error("Falha ao gerar o documento. Verifique os dados extraídos.")
         return None
-
 
 # ---------------------------
 # Interface Streamlit
