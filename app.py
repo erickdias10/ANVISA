@@ -213,7 +213,7 @@ uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
 
 if uploaded_file:
     try:
-        # Certifica-se de que o SpaCy foi carregado
+        # Certifique-se de que o SpaCy foi carregado
         if nlp is None:
             st.error("O modelo SpaCy não pôde ser carregado. Verifique sua instalação.")
         else:
@@ -254,5 +254,3 @@ if uploaded_file:
                         st.error("Erro: O arquivo não foi gerado.")
     except Exception as e:
         st.error(f"Ocorreu um erro: {e}")
-
-
