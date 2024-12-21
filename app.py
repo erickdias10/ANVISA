@@ -7,24 +7,27 @@ import unicodedata
 from docx import Document
 from docx.shared import Pt
 import os
+import joblib
 import streamlit as st
-import spacy
-from spacy.cli import download
 
 # ---------------------------
-# Inicialização do SpaCy
+# Importação de Bibliotecas
+# ---------------------------
+import spacy
+import streamlit as st
+from subprocess import run
+
+# ---------------------------
+# Inicialização do SpaCy com Fallback
 # ---------------------------
 @st.cache_resource
 def load_spacy_model():
     try:
-        # Tenta carregar o modelo grande
         return spacy.load("pt_core_news_lg")
     except OSError:
-        # Mostra mensagem ao usuário e tenta instalar o modelo
-        with st.spinner("Modelo 'pt_core_news_lg' não encontrado. Instalando agora..."):
-            from spacy.cli import download
-            download("pt_core_news_lg")
-        return spacy.load("pt_core_news_lg")
+        st.warning("Modelo 'pt_core_news_lg' não encontrado. Instalando modelo pequeno como alternativa...")
+        run(["python3", "-m", "pip", "install", "--user", "pt-core-news-sm"])
+        return spacy.load("pt_core_news_sm")
     except Exception as e:
         st.error(f"Erro ao carregar o modelo SpaCy: {e}")
         return None
@@ -33,17 +36,54 @@ def load_spacy_model():
 nlp = load_spacy_model()
 
 # ---------------------------
+# Interface Streamlit
+# ---------------------------
+st.title("Sistema de Extração e Geração de Notificações")
+
+if nlp is None:
+    st.error("O modelo SpaCy não pôde ser carregado. Verifique as configurações do ambiente.")
+else:
+    st.success("Modelo SpaCy carregado com sucesso!")
+
+
+# ---------------------------
+# Modelo
+# ---------------------------
+VECTOR_PATH = r"C:\Users\erickd\OneDrive - Bem Promotora de Vendas e Servicos SA\Área de Trabalho\Projeto"
+
+def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_path="address_model.pkl"):
+    try:
+        vectorizer = joblib.load(vectorizer_path)
+        model = joblib.load(model_path)
+        text_vectorized = vectorizer.transform([text])
+        predictions = model.predict(text_vectorized)
+        return predictions
+    except Exception as e:
+        print(f"Erro ao fazer predição de endereços: {e}")
+        return []
+
+def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", model_path="modelo_Nome.pkl"):
+    try:
+        vectorizer = joblib.load(vectorizer_path)
+        model = joblib.load(model_path)
+        text_vectorized = vectorizer.transform([text])
+        predictions = model.predict(text_vectorized)
+        return predictions
+    except Exception as e:
+        print(f"Erro ao fazer predição de nomes e e-mails: {e}")
+        return {}
+
+# ---------------------------
 # Funções de Processamento de Texto
 # ---------------------------
 def normalize_text(text):
-    """Normaliza o texto removendo acentos e espaços extras."""
     if not isinstance(text, str):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    return re.sub(r"\s{2,}", " ", text).strip()
+    text = re.sub(r"\s{2,}", " ", text)  # Remove múltiplos espaços
+    return text.strip()
 
 def corrigir_texto(texto):
-    """Corrige caracteres especiais comuns em PDFs."""
     substituicoes = {
         'Ã©': 'é',
         'Ã§Ã£o': 'ção',
@@ -54,52 +94,135 @@ def corrigir_texto(texto):
         texto = texto.replace(errado, correto)
     return texto
 
-def extract_text_with_pypdf2(pdf_file):
-    """Extrai o texto de um arquivo PDF."""
+def extract_text_with_pypdf2(pdf_path):
     try:
-        reader = PdfReader(pdf_file)
+        reader = PdfReader(pdf_path)
         text = ""
         for page in reader.pages:
             text += page.extract_text() or ""
-        return corrigir_texto(normalize_text(text))
+        text = corrigir_texto(normalize_text(text))
+        return text.strip()
     except Exception as e:
-        st.error(f"Erro ao processar PDF: {e}")
+        print(f"Erro ao processar PDF {pdf_path}: {e}")
         return ''
 
 # ---------------------------
 # Funções de Extração de Dados
 # ---------------------------
 def extract_information(text):
-    """Extrai informações específicas, como nome do autuado, CNPJ, e-mails, etc."""
     autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
     cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
     socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
     email_pattern = r"(?:E-mail|Email):\s*([\w.-]+@[\w.-]+\.[a-z]{2,})"
 
-    return {
+    info = {
         "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
         "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
-        "socios_advogados": re.findall(socios_adv_pattern, text),
-        "emails": re.findall(email_pattern, text),
+        "socios_advogados": re.findall(socios_adv_pattern, text) or [],
+        "emails": re.findall(email_pattern, text) or [],
     }
+    return info
 
-def extract_addresses_with_spacy(text):
-    """Extrai endereços utilizando SpaCy para maior precisão."""
-    doc = nlp(text)
+def extract_addresses(text, pdf_path=None):
+    """
+    Extrai endereços do texto com suporte para evitar duplicados, ignorar endereços nulos e registrar a origem do arquivo e página.
+
+    Args:
+        text (str): Texto extraído do PDF.
+        pdf_path (str, optional): Caminho do arquivo PDF para identificar a página de origem. Default é None.
+
+    Returns:
+        list: Lista de dicionários contendo informações de endereços.
+    """
     addresses = []
-    for ent in doc.ents:
-        if ent.label_ in ["LOC", "GPE"]:
-            addresses.append({"endereco": ent.text.strip()})
-    return addresses
+    seen_addresses = set()  # Para evitar duplicados
+
+    endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
+    cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
+    bairro_pattern = r"Bairro:\s*([\w\s]+)"
+    estado_pattern = r"Estado:\s*([A-Z]{2})"
+    cep_pattern = r"CEP:\s*(\d{2}\.\d{3}-\d{3}|\d{5}-\d{3})"
+
+    # Identificar origem se o caminho do PDF for fornecido
+    if pdf_path:
+        try:
+            reader = PdfReader(pdf_path)
+            for page_num, page in enumerate(reader.pages, start=1):
+                page_text = page.extract_text()
+                if page_text:
+                    matches = re.findall(endereco_pattern, page_text)
+                    for match in matches:
+                        address = match.strip()
+                        if address and address not in seen_addresses:  # Evita duplicados
+                            seen_addresses.add(address)
+                            addresses.append({
+                                "endereco": address,
+                                "pagina": page_num,
+                                "arquivo": os.path.basename(pdf_path),
+                                "cidade": None,
+                                "bairro": None,
+                                "estado": None,
+                                "cep": None
+                            })
+        except Exception as e:
+            print(f"Erro ao processar páginas do PDF: {e}")
+
+    # Processar o texto principal
+    endereco_matches = re.findall(endereco_pattern, text)
+    cidade_matches = re.findall(cidade_pattern, text)
+    bairro_matches = re.findall(bairro_pattern, text)
+    estado_matches = re.findall(estado_pattern, text)
+    cep_matches = re.findall(cep_pattern, text)
+
+    for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
+        endereco = endereco_matches[i].strip() if i < len(endereco_matches) else None
+        cidade = cidade_matches[i].strip() if i < len(cidade_matches) else None
+        bairro = bairro_matches[i].strip() if i < len(bairro_matches) else None
+        estado = estado_matches[i].strip() if i < len(estado_matches) else None
+        cep = cep_matches[i].strip() if i < len(cep_matches) else None
+
+        # Ignorar entradas com endereços repetidos ou nulos
+        if endereco and endereco not in seen_addresses:
+            seen_addresses.add(endereco)
+            addresses.append({
+                "endereco": endereco,
+                "pagina": None,  # Não sabemos a página aqui
+                "arquivo": pdf_path or "[Fonte desconhecida]",
+                "cidade": cidade,
+                "bairro": bairro,
+                "estado": estado,
+                "cep": cep
+            })
+
+    return addresses or []
+
+def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
+    paragrafo = doc.add_paragraph()
+    run = paragrafo.add_run(texto)
+    run.bold = negrito
+    run.font.size = Pt(tamanho)
+    return paragrafo
 
 def extract_process_number(file_name):
-    """Extrai o número do processo a partir do nome do arquivo."""
-    base_name = os.path.splitext(file_name)[0]
-    return base_name[3:].strip() if base_name.startswith("SEI") else base_name
+    """
+    Extrai o número do processo a partir do nome do arquivo, removendo "SEI" e preservando o restante.
+
+    Args:
+        file_name (str): Nome do arquivo enviado.
+
+    Returns:
+        str: Número do processo extraído.
+    """
+    base_name = os.path.splitext(file_name)[0]  # Remove a extensão
+    if base_name.startswith("SEI"):
+        base_name = base_name[3:].strip()  # Remove "SEI"
+    return base_name
 
 # ---------------------------
 # Função de Geração de Documento
 # ---------------------------
+
+
 def gerar_documento_docx(info, enderecos, numero_processo):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
@@ -203,13 +326,6 @@ def gerar_documento_docx(info, enderecos, numero_processo):
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
 
-def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    paragrafo = doc.add_paragraph()
-    run = paragrafo.add_run(texto)
-    run.bold = negrito
-    run.font.size = Pt(tamanho)
-    return paragrafo
-
 # ---------------------------
 # Interface Streamlit
 # ---------------------------
@@ -218,18 +334,22 @@ st.title("Sistema de Extração e Geração de Notificações")
 uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
 
 if uploaded_file:
-    file_name = uploaded_file.name
-    numero_processo = extract_process_number(file_name)
-    text = extract_text_with_pypdf2(uploaded_file)
-    info = extract_information(text)
-    addresses = extract_addresses_with_spacy(text)
+    try:
+        # Extrai o número do processo a partir do nome do arquivo
+        file_name = uploaded_file.name
+        numero_processo = extract_process_number(file_name)
 
-    if st.button("Gerar Documento"):
-        doc_path = gerar_documento_docx(info, addresses, numero_processo)
-        with open(doc_path, "rb") as file:
-            st.download_button(
-                label="Baixar Documento",
-                data=file,
-                file_name=f"Notificacao_Processo_Nº_{numero_processo}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
+        # Extrai o texto do PDF
+        text = extract_text_with_pypdf2(uploaded_file)
+        if text:
+            st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
+            
+            # Extrai informações e endereços
+            info = extract_information(text) or {}
+            addresses = extract_addresses(text) or []
+
+            # Gera o documento ao clicar no botão
+            if st.button("Gerar Documento"):
+                gerar_documento_docx(info, addresses, numero_processo)
+    except Exception as e:
+        st.error(f"Ocorreu um erro: {e}")
