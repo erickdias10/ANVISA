@@ -22,7 +22,6 @@ except OSError:
         spacy.cli.download("en_core_web_sm")
         NLP = spacy.load("en_core_web_sm")
 
-
 # ---------------------------
 # Carregamento do Modelo SpaCy com Fallback
 # ---------------------------
