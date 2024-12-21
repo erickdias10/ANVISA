@@ -14,12 +14,23 @@ from spacy.cli import download
 # ---------------------------
 # Inicialização do SpaCy
 # ---------------------------
-try:
-    nlp = spacy.load("pt_core_news_lg")
-except OSError:
-    st.warning("Modelo 'pt_core_news_lg' não encontrado. Instalando agora...")
-    download("pt_core_news_lg")
-    nlp = spacy.load("pt_core_news_lg")
+@st.cache_resource
+def load_spacy_model():
+    try:
+        # Tenta carregar o modelo grande
+        return spacy.load("pt_core_news_lg")
+    except OSError:
+        # Mostra mensagem ao usuário e tenta instalar o modelo
+        with st.spinner("Modelo 'pt_core_news_lg' não encontrado. Instalando agora..."):
+            from spacy.cli import download
+            download("pt_core_news_lg")
+        return spacy.load("pt_core_news_lg")
+    except Exception as e:
+        st.error(f"Erro ao carregar o modelo SpaCy: {e}")
+        return None
+
+# Carrega o modelo
+nlp = load_spacy_model()
 
 # ---------------------------
 # Funções de Processamento de Texto
