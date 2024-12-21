@@ -11,9 +11,13 @@ import os
 import streamlit as st
 
 # ---------------------------
-# Carregamento do Modelo SpaCy
+# Carregamento do Modelo SpaCy com Fallback
 # ---------------------------
-NLP = spacy.load("en_core_web_lg")
+try:
+    NLP = spacy.load("en_core_web_lg")
+except OSError:
+    NLP = spacy.load("en_core_web_sm")
+    print("Modelo grande não encontrado. Carregado modelo menor 'en_core_web_sm'.")
 
 # ---------------------------
 # Funções de Processamento de Texto
@@ -224,6 +228,6 @@ if uploaded_file:
 
             # Gera o documento ao clicar no botão
             if st.button("Gerar Documento"):
-                gerar_documento_docx(info, numero_processo)
+                gerar_documento_docx(info, [], numero_processo)
     except Exception as e:
         st.error(f"Ocorreu um erro: {e}")
