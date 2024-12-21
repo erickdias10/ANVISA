@@ -1,21 +1,12 @@
-# Bibliotecas principais
+pip>=24.3.1
+setuptools>=65.5.0
+wheel>=0.40.0
 PyPDF2
 python-docx
 pyautogui
 joblib
 streamlit
-pytesseract
-pdf2image
 Pillow
-
-# Ferramentas para instalação e compilação
-pip>=24.3.1
-setuptools>=65.5.0
-wheel>=0.40.0
-
-# Biblioteca SpaCy e modelo grande
 spacy
-en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.6.0/en_core_web_lg-3.6.0.tar.gz
-
-# Forçar uso de binários precompilados
+en-core-web-lg
 --prefer-binary
