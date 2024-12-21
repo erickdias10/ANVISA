@@ -10,6 +10,15 @@ import os
 import joblib
 import streamlit as st
 import spacy
+from spacy.cli import download
+import streamlit as st
+
+try:
+    nlp = spacy.load("pt_core_news_lg")
+except OSError:
+    st.warning("Modelo 'pt_core_news_lg' não encontrado. Instalando agora...")
+    download("pt_core_news_lg")
+    nlp = spacy.load("pt_core_news_lg")
 
 # ---------------------------
 # Inicialização do SpaCy
