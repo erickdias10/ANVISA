@@ -207,21 +207,18 @@ st.title("Sistema de Extração e Geração de Notificações")
 uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
 
 if uploaded_file:
-    try:
-        file_name = uploaded_file.name
-        numero_processo = extract_process_number(file_name)
-        text = extract_text_with_pypdf2(uploaded_file)
-        info = extract_information(text)
-        addresses = extract_addresses_with_spacy(text)
+    file_name = uploaded_file.name
+    numero_processo = extract_process_number(file_name)
+    text = extract_text_with_pypdf2(uploaded_file)
+    info = extract_information(text)
+    addresses = extract_addresses_with_spacy(text)
 
-        if st.button("Gerar Documento"):
-            doc_path = gerar_documento_docx(info, addresses, numero_processo)
-            with open(doc_path, "rb") as file:
-                st.download_button(
-                    label="Baixar Documento",
-                    data=file,
-                    file_name=f"Notificacao_Processo_Nº_{numero_processo}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-    except Exception as e:
-        st.error(f"Ocorreu um erro: {e}")
+    if st.button("Gerar Documento"):
+        doc_path = gerar_documento_docx(info, addresses, numero_processo)
+        with open(doc_path, "rb") as file:
+            st.download_button(
+                label="Baixar Documento",
+                data=file,
+                file_name=f"Notificacao_Processo_Nº_{numero_processo}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
