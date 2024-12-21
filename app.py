@@ -87,14 +87,51 @@ def extract_information(text):
     }
     return info
 
-def extract_addresses(text):
+def extract_addresses(text, pdf_path=None):
+    """
+    Extrai endereços do texto com suporte para evitar duplicados, ignorar endereços nulos e registrar a origem do arquivo e página.
+
+    Args:
+        text (str): Texto extraído do PDF.
+        pdf_path (str, optional): Caminho do arquivo PDF para identificar a página de origem. Default é None.
+
+    Returns:
+        list: Lista de dicionários contendo informações de endereços.
+    """
     addresses = []
+    seen_addresses = set()  # Para evitar duplicados
+
     endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
     cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
     bairro_pattern = r"Bairro:\s*([\w\s]+)"
     estado_pattern = r"Estado:\s*([A-Z]{2})"
     cep_pattern = r"CEP:\s*(\d{2}\.\d{3}-\d{3}|\d{5}-\d{3})"
 
+    # Identificar origem se o caminho do PDF for fornecido
+    if pdf_path:
+        try:
+            reader = PdfReader(pdf_path)
+            for page_num, page in enumerate(reader.pages, start=1):
+                page_text = page.extract_text()
+                if page_text:
+                    matches = re.findall(endereco_pattern, page_text)
+                    for match in matches:
+                        address = match.strip()
+                        if address and address not in seen_addresses:  # Evita duplicados
+                            seen_addresses.add(address)
+                            addresses.append({
+                                "endereco": address,
+                                "pagina": page_num,
+                                "arquivo": os.path.basename(pdf_path),
+                                "cidade": None,
+                                "bairro": None,
+                                "estado": None,
+                                "cep": None
+                            })
+        except Exception as e:
+            print(f"Erro ao processar páginas do PDF: {e}")
+
+    # Processar o texto principal
     endereco_matches = re.findall(endereco_pattern, text)
     cidade_matches = re.findall(cidade_pattern, text)
     bairro_matches = re.findall(bairro_pattern, text)
@@ -102,15 +139,24 @@ def extract_addresses(text):
     cep_matches = re.findall(cep_pattern, text)
 
     for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
-        address = {
-            "endereco": endereco_matches[i].strip() if i < len(endereco_matches) else None,
-            "cidade": cidade_matches[i].strip() if i < len(cidade_matches) else None,
-            "bairro": bairro_matches[i].strip() if i < len(bairro_matches) else None,
-            "estado": estado_matches[i].strip() if i < len(estado_matches) else None,
-            "cep": cep_matches[i].strip() if i < len(cep_matches) else None
-        }
-        if any(address.values()):
-            addresses.append(address)
+        endereco = endereco_matches[i].strip() if i < len(endereco_matches) else None
+        cidade = cidade_matches[i].strip() if i < len(cidade_matches) else None
+        bairro = bairro_matches[i].strip() if i < len(bairro_matches) else None
+        estado = estado_matches[i].strip() if i < len(estado_matches) else None
+        cep = cep_matches[i].strip() if i < len(cep_matches) else None
+
+        # Ignorar entradas com endereços repetidos ou nulos
+        if endereco and endereco not in seen_addresses:
+            seen_addresses.add(endereco)
+            addresses.append({
+                "endereco": endereco,
+                "pagina": None,  # Não sabemos a página aqui
+                "arquivo": pdf_path or "[Fonte desconhecida]",
+                "cidade": cidade,
+                "bairro": bairro,
+                "estado": estado,
+                "cep": cep
+            })
 
     return addresses or []
 
@@ -167,7 +213,7 @@ def gerar_documento_docx(info, enderecos, numero_processo):
         doc = Document()
 
         doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "[Ao Senhor/À Senhora]")
+        adicionar_paragrafo(doc, ("Ao(a) Senhor(a):")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
