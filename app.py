@@ -94,16 +94,6 @@ def extract_process_number(file_name):
         base_name = base_name[3:].strip()  # Remove "SEI"
     return base_name
 
-def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    paragrafo = doc.add_paragraph()
-    run = paragrafo.add_run(texto)
-    run.bold = negrito
-    run.font.size = Pt(tamanho)
-    return paragrafo
-
-# ---------------------------
-# Função de Geração de Documento
-# ---------------------------
 def gerar_documento_docx(info, enderecos, numero_processo):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
@@ -206,6 +196,13 @@ def gerar_documento_docx(info, enderecos, numero_processo):
             )
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
+
+def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
+    paragrafo = doc.add_paragraph()
+    run = paragrafo.add_run(texto)
+    run.bold = negrito
+    run.font.size = Pt(tamanho)
+    return paragrafo
 
 # ---------------------------
 # Interface Streamlit
