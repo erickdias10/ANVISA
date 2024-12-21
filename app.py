@@ -1,40 +1,21 @@
 # ---------------------------
 # Importação de Bibliotecas
 # ---------------------------
-# Importações padrão e de terceiros para funcionalidades diversas no projeto.
 import re
 from PyPDF2 import PdfReader
 import unicodedata
-from tkinter import Tk, filedialog
 from docx import Document
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
-import pyautogui
 import os
-import glob
-import time
 import joblib
 import streamlit as st
 
 # ---------------------------
 # Modelo
 # ---------------------------
-# Predições
-
 VECTOR_PATH = r"C:\Users\erickd\OneDrive - Bem Promotora de Vendas e Servicos SA\Área de Trabalho\Projeto"
 
 def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_path="address_model.pkl"):
-    """
-    Prediz endereços em um texto usando um modelo treinado.
-
-    Args:
-        text (str): Texto a ser analisado.
-        vectorizer_path (str): Caminho para o vetorizar salvo.
-        model_path (str): Caminho para o modelo treinado.
-
-    Returns:
-        list: Lista de endereços previstos.
-    """
     try:
         vectorizer = joblib.load(vectorizer_path)
         model = joblib.load(model_path)
@@ -46,17 +27,6 @@ def predict_addresses_with_model(text, vectorizer_path="vectorizer.pkl", model_p
         return []
 
 def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", model_path="modelo_Nome.pkl"):
-    """
-    Prediz nomes, CPFs/CNPJs e e-mails em um texto usando um modelo treinado.
-
-    Args:
-        text (str): Texto a ser analisado.
-        vectorizer_path (str): Caminho para o vetorizar salvo.
-        model_path (str): Caminho para o modelo treinado.
-
-    Returns:
-        dict: Dicionário com previsões de nomes e e-mails.
-    """
     try:
         vectorizer = joblib.load(vectorizer_path)
         model = joblib.load(model_path)
@@ -68,92 +38,9 @@ def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", m
         return {}
 
 # ---------------------------
-# Funções de Automação (PyAutoGUI)
-# ---------------------------
-# Funções para automação de interface simulando interações do usuário.
-def move_and_click(x, y):
-    """
-    Move o cursor do mouse para as coordenadas especificadas e realiza um clique.
-
-    Args:
-        x (int): Coordenada X para mover o mouse.
-        y (int): Coordenada Y para mover o mouse.
-    """
-    try:
-        pyautogui.moveTo(x, y)
-        pyautogui.click()
-    except Exception as e:
-        print(f"Erro ao clicar nas coordenadas ({x}, {y}): {e}")
-
-def buscar_processo(processo):
-    """
-    Busca um processo no sistema através de automação.
-
-    Args:
-        processo (str): Número do processo.
-    """
-    try:
-        print("Buscando o processo...")
-        move_and_click(1465, 199)  # Coordenadas do campo de busca
-        pyautogui.write(processo)  # Digita o número do processo
-        pyautogui.press("enter")  # Pressiona Enter
-        time.sleep(10)  # Aguarda o carregamento
-    except Exception as e:
-        print(f"Erro ao buscar o processo: {e}")
-
-def baixar_processo():
-    """
-    Realiza o download do processo em PDF utilizando automação.
-    """
-    try:
-        print("Baixando o processo...")
-        move_and_click(1084, 256)  # Botão para gerar o PDF
-        time.sleep(10)  # Aguarda carregamento
-        move_and_click(1792, 288)  # Botão para confirmar
-        time.sleep(20)  # Aguarda o download
-    except Exception as e:
-        print(f"Erro ao baixar o processo: {e}")
-
-
-def buscar_ultimo_arquivo_baixado(diretorio_downloads):
-    """
-    Busca o último arquivo baixado no diretório especificado.
-    
-    Args:
-        diretorio_downloads (str): Caminho para o diretório de downloads.
-        
-    Returns:
-        str: Caminho completo do último arquivo baixado, ou None se nenhum arquivo for encontrado.
-    """
-    try:
-        arquivos = glob.glob(os.path.join(diretorio_downloads, "*"))
-        
-        if not arquivos:
-            print("Nenhum arquivo encontrado no diretório de downloads.")
-            return None
-
-        ultimo_arquivo = max(arquivos, key=os.path.getmtime)
-        print(f"Último arquivo baixado encontrado: {ultimo_arquivo}")
-        return ultimo_arquivo
-    except Exception as e:
-        print(f"Erro ao buscar o último arquivo baixado: {e}")
-        return None
-
-
-# ---------------------------
 # Funções de Processamento de Texto
 # ---------------------------
-# Funções para manipulação e extração de texto de arquivos PDF.
 def normalize_text(text):
-    """
-    Remove caracteres especiais e normaliza o texto.
-
-    Args:
-        text (str): Texto a ser normalizado.
-
-    Returns:
-        str: Texto normalizado.
-    """
     if not isinstance(text, str):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
@@ -161,15 +48,6 @@ def normalize_text(text):
     return text.strip()
 
 def corrigir_texto(texto):
-    """
-    Corrige caracteres corrompidos em textos extraídos.
-
-    Args:
-        texto (str): Texto a ser corrigido.
-
-    Returns:
-        str: Texto corrigido.
-    """
     substituicoes = {
         'Ã©': 'é',
         'Ã§Ã£o': 'ção',
@@ -181,15 +59,6 @@ def corrigir_texto(texto):
     return texto
 
 def extract_text_with_pypdf2(pdf_path):
-    """
-    Extrai texto de um arquivo PDF utilizando PyPDF2.
-
-    Args:
-        pdf_path (str): Caminho do arquivo PDF.
-
-    Returns:
-        str: Texto extraído.
-    """
     try:
         reader = PdfReader(pdf_path)
         text = ""
@@ -204,17 +73,7 @@ def extract_text_with_pypdf2(pdf_path):
 # ---------------------------
 # Funções de Extração de Dados
 # ---------------------------
-# Funções para identificar informações específicas em textos processados.
 def extract_information(text):
-    """
-    Extrai informações como nome, CPF/CNPJ, advogados e e-mails de um texto.
-
-    Args:
-        text (str): Texto de entrada.
-
-    Returns:
-        dict: Informações extraídas.
-    """
     autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
     cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
     socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
@@ -223,21 +82,12 @@ def extract_information(text):
     info = {
         "nome_autuado": re.search(autuado_pattern, text).group(1) if re.search(autuado_pattern, text) else None,
         "cnpj_cpf": re.search(cnpj_cpf_pattern, text).group(1) if re.search(cnpj_cpf_pattern, text) else None,
-        "socios_advogados": re.findall(socios_adv_pattern, text),
-        "emails": re.findall(email_pattern, text),
+        "socios_advogados": re.findall(socios_adv_pattern, text) or [],
+        "emails": re.findall(email_pattern, text) or [],
     }
     return info
 
 def extract_addresses(text):
-    """
-    Extrai informações de endereço do texto.
-
-    Args:
-        text (str): Texto contendo endereços.
-
-    Returns:
-        list: Lista de endereços extraídos.
-    """
     addresses = []
     endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
     cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
@@ -259,45 +109,61 @@ def extract_addresses(text):
             "estado": estado_matches[i].strip() if i < len(estado_matches) else None,
             "cep": cep_matches[i].strip() if i < len(cep_matches) else None
         }
-        if any(address.values()) and address not in addresses:
+        if any(address.values()):
             addresses.append(address)
 
-    return addresses
+    return addresses or []
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    """
-    Adiciona um parágrafo ao documento com texto opcionalmente em negrito e com tamanho de fonte ajustável.
-    
-    Args:
-        doc (Document): Documento onde o parágrafo será adicionado.
-        texto (str): Texto do parágrafo.
-        negrito (bool): Define se o texto será em negrito.
-        tamanho (int): Tamanho da fonte.
-    """
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
     run.bold = negrito
     run.font.size = Pt(tamanho)
     return paragrafo
 
+def extract_process_number(file_name):
+    """
+    Extrai o número do processo a partir do nome do arquivo, removendo "SEI" e preservando o restante.
+
+    Args:
+        file_name (str): Nome do arquivo enviado.
+
+    Returns:
+        str: Número do processo extraído.
+    """
+    base_name = os.path.splitext(file_name)[0]  # Remove a extensão
+    if base_name.startswith("SEI"):
+        base_name = base_name[3:].strip()  # Remove "SEI"
+    return base_name
+
 # ---------------------------
 # Função de Geração de Documento
 # ---------------------------
-# Função que cria o arquivo DOCX com base nos dados extraídos.
-def gerar_documento_docx(process_number, info, enderecos, output_path="Notificacao_Processo_Nº_{process_number}.docx"):
+
+
+def gerar_documento_docx(info, enderecos, numero_processo):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
 
     Args:
-        process_number (str): Número do processo administrativo.
-        info (dict): Informações extraídas do texto.
-        enderecos (list): Endereços extraídos.
-        output_path (str): Caminho para salvar o documento.
+        info (dict): Dicionário com informações extraídas do texto.
+        enderecos (list): Lista de dicionários contendo informações de endereços.
+        numero_processo (str): Número do processo extraído do nome do arquivo.
+
+    Returns:
+        str: Caminho do arquivo gerado.
     """
     try:
-        diretorio_downloads = os.path.expanduser("~/Downloads")
-        output_path = os.path.join(diretorio_downloads, f"Notificacao_Processo_Nº_{process_number}.docx")
+        # Diretório seguro para salvar arquivos
+        output_directory = "output"
+        os.makedirs(output_directory, exist_ok=True)
+
+        # Caminho completo do arquivo
+        output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
+
+
         
+        # Criação do documento
         doc = Document()
 
         doc.add_paragraph("\n")
@@ -314,11 +180,10 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
             adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
 
-
         # Corpo principal
             # Corpo principal
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
-        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {process_number}", negrito=True)
+        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
         doc.add_paragraph("\n")  # Quebra de linha
         adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
         doc.add_paragraph("\n")  # Quebra de linha
@@ -350,7 +215,10 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
         adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
         adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
         doc.add_paragraph("\n")  # Quebra de linha
-       
+
+        # Interface Streamlit
+        uploaded_file = st.file_uploader("Envie o arquivo PDF do processo", type="pdf")
+        
         # Fechamento
         advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])
         advogado_nome = advogado_nome[0] if advogado_nome else "[Nome não informado]"
@@ -360,83 +228,46 @@ def gerar_documento_docx(process_number, info, enderecos, output_path="Notificac
         
         adicionar_paragrafo(doc, f"Por fim, esclarecemos que foi concedido aos autos por meio do Sistema Eletrônico de Informações (SEI), por 180 (cento e oitenta) dias, ao usuário: {advogado_nome} – E-mail: {advogado_email}")
         adicionar_paragrafo(doc, "Atenciosamente,", negrito=True)
-      
+
+
         # Salva o documento
         doc.save(output_path)
-        print(f"Documento gerado com sucesso: {output_path}")
+
+        # Botão de download no Streamlit
+        with open(output_path, "rb") as file:
+            st.download_button(
+                label="Baixar Documento",
+                data=file,
+                file_name=f"Notificacao_Processo_Nº_{numero_processo}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
     except Exception as e:
-        print(f"Erro ao gerar o documento DOCX: {e}")
+        st.error(f"Erro ao gerar o documento DOCX: {e}")
 
 # ---------------------------
-# Função Principal
+# Interface Streamlit
 # ---------------------------
-# Lógica principal que integra todos os componentes e executa o fluxo completo.
-def main():
-    print("Testando carregamento dos modelos...")
+st.title("Sistema de Extração e Geração de Notificações")
+
+uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
+
+if uploaded_file:
     try:
-        vectorizer_address = joblib.load(os.path.join(VECTOR_PATH, "vectorizer.pkl"))
-        model_address = joblib.load(os.path.join(VECTOR_PATH, "address_model.pkl"))
-        print("Modelos de endereço carregados com sucesso.")
+        # Extrai o número do processo a partir do nome do arquivo
+        file_name = uploaded_file.name
+        numero_processo = extract_process_number(file_name)
 
-        vectorizer_name = joblib.load(os.path.join(VECTOR_PATH, "vectorizer_Nome.pkl"))
-        model_name = joblib.load(os.path.join(VECTOR_PATH, "modelo_Nome.pkl"))
-        print("Modelos de nome e e-mail carregados com sucesso.")
+        # Extrai o texto do PDF
+        text = extract_text_with_pypdf2(uploaded_file)
+        if text:
+            st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
+            
+            # Extrai informações e endereços
+            info = extract_information(text) or {}
+            addresses = extract_addresses(text) or []
+
+            # Gera o documento ao clicar no botão
+            if st.button("Gerar Documento"):
+                gerar_documento_docx(info, addresses, numero_processo)
     except Exception as e:
-        print(f"Erro ao carregar modelos: {e}")
-        return  # Sai da função se os modelos não forem carregados
-
-    processo = input("Digite o número do processo: ")
-
-    buscar_processo(processo)
-    baixar_processo()
-
-    diretorio_downloads = os.path.expanduser("~/Downloads")
-    pdf_path = buscar_ultimo_arquivo_baixado(diretorio_downloads)
-
-    if pdf_path:
-        print(f"PDF encontrado: {pdf_path}")
-        texto_extraido = extract_text_with_pypdf2(pdf_path)
-        if texto_extraido:
-            print("Texto extraído com sucesso.")
-
-            # Extração de informações com regex
-            info = extract_information(texto_extraido)
-            print(f"Informações extraídas: {info}")
-
-            # Extração de endereços com regex
-            enderecos_regex = extract_addresses(texto_extraido)
-            print(f"Endereços extraídos com regex: {enderecos_regex}")
-
-            # Predição de endereços com modelo treinado
-            enderecos_pred = predict_addresses_with_model(
-                texto_extraido,
-                vectorizer_path=os.path.join(VECTOR_PATH, "vectorizer.pkl"),
-                model_path=os.path.join(VECTOR_PATH, "address_model.pkl"),
-            )
-            print(f"Endereços previstos: {enderecos_pred}")
-
-            # Formatar os endereços previstos para serem compatíveis com enderecos_regex
-            enderecos_pred_formatados = [
-                {"endereco": endereco, "cidade": None, "bairro": None, "estado": None, "cep": None}
-                for endereco in enderecos_pred
-            ]
-
-            # Predição de nomes e e-mails com modelo treinado
-            predicoes_nome_email = predict_Nome_Email_with_model(
-                texto_extraido,
-                vectorizer_path=os.path.join(VECTOR_PATH, "vectorizer_Nome.pkl"),
-                model_path=os.path.join(VECTOR_PATH, "modelo_Nome.pkl"),
-            )
-            print(f"Predições de nomes e e-mails: {predicoes_nome_email}")
-
-            # Combinação de resultados
-            print("Gerando documento com informações extraídas e predições...")
-            gerar_documento_docx(processo, info, enderecos_regex + enderecos_pred_formatados)
-            print(f"Documento gerado com sucesso no caminho: {os.path.join(diretorio_downloads, f'Notificacao_Processo_Nº_{processo}.docx')}")
-        else:
-            print("Nenhum texto extraído do PDF.")
-    else:
-        print("Nenhum arquivo encontrado.")
-
-if __name__ == "__main__":
-    main()
+        st.error(f"Ocorreu um erro: {e}")
