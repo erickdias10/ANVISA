@@ -9,6 +9,9 @@ from docx.shared import Pt
 import os
 import joblib
 import streamlit as st
+import spacy
+import re
+from spacy.tokens import DocBin
 
 # ---------------------------
 # Modelo
@@ -40,6 +43,68 @@ def predict_Nome_Email_with_model(text, vectorizer_path="vectorizer_Nome.pkl", m
 # ---------------------------
 # Funções de Processamento de Texto
 # ---------------------------
+
+# Carregar modelo do spaCy
+nlp = spacy.load("pt_core_news_lg")
+
+def extract_addresses_with_spacy(text, pdf_path=None):
+    """
+    Extrai endereços utilizando spaCy para melhorar a precisão.
+    """
+    addresses = []
+    seen_addresses = set()
+
+    # Função para normalizar o texto
+    def normalize_text(text):
+        return re.sub(r"\s{2,}", " ", text.strip())
+
+    # Processar o texto com spaCy
+    doc = nlp(text)
+
+    # Inicializar campos
+    current_address = {
+        "endereco": None,
+        "cidade": None,
+        "bairro": None,
+        "estado": None,
+        "cep": None,
+        "pagina": None,
+        "arquivo": pdf_path if pdf_path else "[Fonte desconhecida]"
+    }
+
+    for ent in doc.ents:
+        if ent.label_ in ["LOC", "GPE"]:  # Localização e entidades geográficas
+            if current_address["cidade"] is None:
+                current_address["cidade"] = normalize_text(ent.text)
+        elif re.match(r"\b\d{5}-?\d{3}\b", ent.text):  # Detectar CEP
+            current_address["cep"] = normalize_text(ent.text)
+        elif re.search(r"(Rua|Av\\.|Avenida|Rod\\.|Travessa|Alameda)", ent.text, re.IGNORECASE):
+            current_address["endereco"] = normalize_text(ent.text)
+        elif "bairro" in ent.text.lower():
+            current_address["bairro"] = normalize_text(ent.text)
+
+    # Adicionar endereço completo se válido e não duplicado
+    full_address = f"{current_address['endereco']} {current_address['cidade']} {current_address['bairro']} {current_address['estado']} {current_address['cep']}".strip()
+    if full_address and full_address not in seen_addresses:
+        seen_addresses.add(full_address)
+        addresses.append(current_address)
+
+    return addresses
+
+# Teste
+texto_exemplo = """
+Endereço: Rua Gomes de Carvalho, 1306 - Vila Olimpia - São Paulo - SP - 04547-005
+Cidade: São Paulo
+Bairro: Vila Olimpia
+CEP: 04547-005
+Estado: SP
+"""
+
+resultado = extract_addresses_with_spacy(texto_exemplo)
+for addr in resultado:
+    print(addr)
+
+
 def normalize_text(text):
     if not isinstance(text, str):
         return text
