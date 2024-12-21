@@ -9,6 +9,19 @@ from docx import Document
 from docx.shared import Pt
 import os
 import streamlit as st
+import spacy.cli
+
+try:
+    NLP = spacy.load("en_core_web_lg")
+except OSError:
+    print("Tentando carregar o modelo menor 'en_core_web_sm'...")
+    try:
+        NLP = spacy.load("en_core_web_sm")
+    except OSError:
+        print("Modelo menor não encontrado. Instalando 'en_core_web_sm'...")
+        spacy.cli.download("en_core_web_sm")
+        NLP = spacy.load("en_core_web_sm")
+
 
 # ---------------------------
 # Carregamento do Modelo SpaCy com Fallback
