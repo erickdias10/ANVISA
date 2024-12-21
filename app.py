@@ -213,34 +213,45 @@ uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
 
 if uploaded_file:
     try:
-        file_name = uploaded_file.name
-        numero_processo = extract_process_number(file_name)
+        # Certifica-se de que o SpaCy foi carregado
+        if nlp is None:
+            st.error("O modelo SpaCy não pôde ser carregado. Verifique sua instalação.")
+        else:
+            file_name = uploaded_file.name
+            numero_processo = extract_process_number(file_name)
 
-        text = extract_text_with_pypdf2(uploaded_file)
-        if text:
-            st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
+            # Extrai texto do PDF
+            text = extract_text_with_pypdf2(uploaded_file)
+            if not text:
+                st.error("O texto não pôde ser extraído do PDF. Verifique o arquivo.")
+            else:
+                st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
 
-            info = extract_information_with_spacy(text) or {}
-            addresses = extract_addresses_with_spacy(text) or []
+                # Extrai informações e endereços
+                info = extract_information_with_spacy(text) or {}
+                addresses = extract_addresses_with_spacy(text) or []
 
-            if st.button("Gerar Documento"):
-                # Chama a função para gerar o documento
-                gerar_documento_docx(info, addresses, numero_processo)
+                # Gera o documento quando o botão for clicado
+                if st.button("Gerar Documento"):
+                    # Certifica-se de que o diretório de saída existe
+                    os.makedirs("output", exist_ok=True)
 
-                # Define o caminho do arquivo baseado no padrão da função
-                output_directory = "output"
-                output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
+                    gerar_documento_docx(info, addresses, numero_processo)
 
-                # Verifica se o arquivo foi gerado antes de abri-lo
-                if os.path.exists(output_path):
-                    with open(output_path, "rb") as file:
-                        st.download_button(
-                            label="Baixar Documento",
-                            data=file,
-                            file_name=f"Notificacao_Processo_Nº_{numero_processo}.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
-                else:
-                    st.error("Erro: O arquivo não foi gerado.")
+                    # Define o caminho do arquivo gerado
+                    output_path = os.path.join("output", f"Notificacao_Processo_Nº_{numero_processo}.docx")
+
+                    # Verifica se o arquivo foi gerado com sucesso
+                    if os.path.exists(output_path):
+                        with open(output_path, "rb") as file:
+                            st.download_button(
+                                label="Baixar Documento",
+                                data=file,
+                                file_name=f"Notificacao_Processo_Nº_{numero_processo}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                    else:
+                        st.error("Erro: O arquivo não foi gerado.")
     except Exception as e:
         st.error(f"Ocorreu um erro: {e}")
+
