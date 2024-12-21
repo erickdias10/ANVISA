@@ -14,10 +14,10 @@ from spacy.cli import download
 import streamlit as st
 
 try:
-    # Tenta carregar o modelo pt_core_news_lg
-    nlp = spacy.load("pt_core_news_lg")
+    # Tenta carregar o modelo pt_core_news_sm
+    nlp = spacy.load("pt_core_news_sm")
 except OSError:
-    st.warning("Modelo 'pt_core_news_lg' não encontrado. Instalando agora...")
+    st.warning("Modelo 'pt_core_news_sm' não encontrado. Instalando agora...")
     download("pt_core_news_lg")  # Baixa o modelo
     nlp = spacy.load("pt_core_news_lg")
 
