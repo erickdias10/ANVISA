@@ -227,6 +227,23 @@ if uploaded_file:
             addresses = extract_addresses_with_spacy(text) or []
 
             if st.button("Gerar Documento"):
+                # Chama a função para gerar o documento
                 gerar_documento_docx(info, addresses, numero_processo)
+
+                # Define o caminho do arquivo baseado no padrão da função
+                output_directory = "output"
+                output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
+
+                # Verifica se o arquivo foi gerado antes de abri-lo
+                if os.path.exists(output_path):
+                    with open(output_path, "rb") as file:
+                        st.download_button(
+                            label="Baixar Documento",
+                            data=file,
+                            file_name=f"Notificacao_Processo_Nº_{numero_processo}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                else:
+                    st.error("Erro: O arquivo não foi gerado.")
     except Exception as e:
         st.error(f"Ocorreu um erro: {e}")
