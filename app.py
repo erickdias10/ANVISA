@@ -9,24 +9,22 @@ from docx import Document
 from docx.shared import Pt
 import os
 import streamlit as st
+import spacy
 import spacy.cli
 import os
 
-# Diretório customizado
+# Diretório customizado para modelos SpaCy
 custom_model_path = os.path.expanduser("~/spacy_models")
 os.makedirs(custom_model_path, exist_ok=True)
 
-# Configurar o diretório customizado
-spacy.util.set_data_path(custom_model_path)
-
+# Instala o modelo diretamente no diretório customizado
 try:
+    spacy.cli.download("en_core_web_lg", "--user")
     nlp = spacy.load("en_core_web_lg")
 except OSError:
-    print("Instalando o modelo 'en_core_web_lg' no diretório customizado...")
-    spacy.cli.download("en_core_web_lg")
-    nlp = spacy.load("en_core_web_lg")
-
-
+    print("Erro ao carregar o modelo. Tentando 'en_core_web_sm' como alternativa.")
+    spacy.cli.download("en_core_web_sm", "--user")
+    nlp = spacy.load("en_core_web_sm")
 
 # ---------------------------
 # Carregamento do Modelo SpaCy com Fallback
