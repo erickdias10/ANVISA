@@ -7,44 +7,32 @@ import unicodedata
 from docx import Document
 from docx.shared import Pt
 import os
-import joblib
 import streamlit as st
 import spacy
 from spacy.cli import download
-import streamlit as st
-
-try:
-    # Tenta carregar o modelo pt_core_news_lg
-    nlp = spacy.load("pt_core_news_lg")
-except OSError:
-    st.warning("Modelo 'pt_core_news_lg' não encontrado. Instalando agora...")
-    download("pt_core_news_lg")  # Baixa o modelo
-    nlp = spacy.load("pt_core_news_lg")
-
 
 # ---------------------------
 # Inicialização do SpaCy
 # ---------------------------
-nlp = spacy.load("pt_core_news_lg")
+try:
+    nlp = spacy.load("pt_core_news_lg")
+except OSError:
+    st.warning("Modelo 'pt_core_news_lg' não encontrado. Instalando agora...")
+    download("pt_core_news_lg")
+    nlp = spacy.load("pt_core_news_lg")
 
 # ---------------------------
 # Funções de Processamento de Texto
 # ---------------------------
-
 def normalize_text(text):
-    """
-    Normaliza o texto removendo acentos e espaços extras.
-    """
+    """Normaliza o texto removendo acentos e espaços extras."""
     if not isinstance(text, str):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    text = re.sub(r"\s{2,}", " ", text)  # Remove múltiplos espaços
-    return text.strip()
+    return re.sub(r"\s{2,}", " ", text).strip()
 
 def corrigir_texto(texto):
-    """
-    Corrige caracteres especiais comuns em PDFs.
-    """
+    """Corrige caracteres especiais comuns em PDFs."""
     substituicoes = {
         'Ã©': 'é',
         'Ã§Ã£o': 'ção',
@@ -56,9 +44,7 @@ def corrigir_texto(texto):
     return texto
 
 def extract_text_with_pypdf2(pdf_file):
-    """
-    Extrai o texto de um arquivo PDF.
-    """
+    """Extrai o texto de um arquivo PDF."""
     try:
         reader = PdfReader(pdf_file)
         text = ""
@@ -72,11 +58,8 @@ def extract_text_with_pypdf2(pdf_file):
 # ---------------------------
 # Funções de Extração de Dados
 # ---------------------------
-
 def extract_information(text):
-    """
-    Extrai informações específicas, como nome do autuado, CNPJ, e-mails, etc.
-    """
+    """Extrai informações específicas, como nome do autuado, CNPJ, e-mails, etc."""
     autuado_pattern = r"(?:NOME AUTUADO|Autuado|Empresa|Razão Social):\s*([\w\s,.-]+)"
     cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
     socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
@@ -90,27 +73,22 @@ def extract_information(text):
     }
 
 def extract_addresses_with_spacy(text):
-    """
-    Extrai endereços utilizando SpaCy para melhor precisão.
-    """
+    """Extrai endereços utilizando SpaCy para maior precisão."""
     doc = nlp(text)
     addresses = []
     for ent in doc.ents:
         if ent.label_ in ["LOC", "GPE"]:
-            addresses.append(ent.text.strip())
+            addresses.append({"endereco": ent.text.strip()})
     return addresses
 
 def extract_process_number(file_name):
-    """
-    Extrai o número do processo a partir do nome do arquivo.
-    """
-    base_name = os.path.splitext(file_name)[0]  # Remove a extensão
+    """Extrai o número do processo a partir do nome do arquivo."""
+    base_name = os.path.splitext(file_name)[0]
     return base_name[3:].strip() if base_name.startswith("SEI") else base_name
 
 # ---------------------------
 # Função de Geração de Documento
 # ---------------------------
-
 def gerar_documento_docx(info, enderecos, numero_processo):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
@@ -214,10 +192,16 @@ def gerar_documento_docx(info, enderecos, numero_processo):
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
 
+def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
+    paragrafo = doc.add_paragraph()
+    run = paragrafo.add_run(texto)
+    run.bold = negrito
+    run.font.size = Pt(tamanho)
+    return paragrafo
+
 # ---------------------------
 # Interface Streamlit
 # ---------------------------
-
 st.title("Sistema de Extração e Geração de Notificações")
 
 uploaded_file = st.file_uploader("Envie um arquivo PDF", type="pdf")
@@ -226,13 +210,10 @@ if uploaded_file:
     try:
         file_name = uploaded_file.name
         numero_processo = extract_process_number(file_name)
-
-        # Extrair texto e informações
         text = extract_text_with_pypdf2(uploaded_file)
         info = extract_information(text)
         addresses = extract_addresses_with_spacy(text)
 
-        # Gerar documento
         if st.button("Gerar Documento"):
             doc_path = gerar_documento_docx(info, addresses, numero_processo)
             with open(doc_path, "rb") as file:
