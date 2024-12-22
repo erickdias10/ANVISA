@@ -16,7 +16,7 @@ import spacy
 # ---------------------------
 # Modelo SpaCy
 # ---------------------------
-nlp = spacy.load("pt_core_news_sm")  # Modelo SpaCy para Português
+nlp = spacy.load("pt_core_news_lg")  # Modelo SpaCy para Português
 
 def predict_with_spacy(text, entity_label):
     try:
