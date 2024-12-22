@@ -10,5 +10,5 @@ pytesseract
 pdf2image
 Pillow
 spacy==3.5.3
-https://github.com/explosion/spacy-models/releases/download/pt_core_news_lg-3.5.0/pt_core_news_lg-3.5.0.tar.gz
+https://github.com/explosion/spacy-models/releases/download/pt_core_news_sm-3.5.0/pt_core_news_sm-3.5.0.tar.gz
 wheel
