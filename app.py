@@ -10,8 +10,8 @@ import os
 import joblib
 import streamlit as st
 import spacy
-nlp = spacy.load("pt_core_news_sm")
-print("Modelo carregado com sucesso!")
+# nlp = spacy.load("pt_core_news_sm")
+# print("Modelo carregado com sucesso!")
 
 # ---------------------------
 # Modelo SpaCy
