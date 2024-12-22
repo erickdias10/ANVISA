@@ -1,46 +1,30 @@
-# ---------------------------
-# Importação de Bibliotecas
-# ---------------------------
 import re
 from PyPDF2 import PdfReader
 import unicodedata
 from docx import Document
 from docx.shared import Pt
 import os
-import joblib
 import streamlit as st
-import spacy
 import subprocess
 import sys
 
+# ---------------------------
 # Certifique-se de que o modelo SpaCy esteja baixado
-try:
-    nlp = spacy.load("pt_core_news_sm")
-except OSError:
-    spacy.cli.download("pt_core_news_sm")
-    nlp = spacy.load("pt_core_news_sm")
-
-def install_and_import(package):
+# ---------------------------
+def install_spacy_model():
     try:
-        __import__(package)
-    except ImportError:
-        st.warning(f"Instalando o pacote {package}... Isso pode levar alguns minutos.")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        st.success(f"Pacote {package} instalado com sucesso!")
+        import spacy
+        spacy.load("pt_core_news_sm")
+    except OSError:
+        subprocess.check_call([sys.executable, "-m", "spacy", "download", "pt_core_news_sm", "--user"])
 
-try:
-    nlp = spacy.load("pt_core_news_sm")
-except OSError:
-    import spacy.cli
-    spacy.cli.download("pt_core_news_sm")
-    nlp = spacy.load("pt_core_news_sm")
-
+install_spacy_model()
+import spacy
+nlp = spacy.load("pt_core_news_sm")
 
 # ---------------------------
-# Modelo SpaCy
+# Funções do SpaCy
 # ---------------------------
-nlp = spacy.load("pt_core_news_sm")  # Modelo SpaCy para Português
-
 def predict_with_spacy(text, entity_label):
     try:
         doc = nlp(text)
