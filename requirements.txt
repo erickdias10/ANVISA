@@ -9,5 +9,6 @@ streamlit
 pytesseract
 pdf2image
 Pillow
-Spacy
+spacy
 pt-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/pt_core_news_sm-3.5.0/pt_core_news_sm-3.5.0.tar.gz
+
