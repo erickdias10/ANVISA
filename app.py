@@ -1,26 +1,29 @@
 # ---------------------------
 # Importação de Bibliotecas
 # ---------------------------
-import spacy
 import re
-import unicodedata
 from PyPDF2 import PdfReader
+import unicodedata
 from docx import Document
 from docx.shared import Pt
 import os
+import joblib
 import streamlit as st
+import spacy
 
 # ---------------------------
-# Carregar o modelo SpaCy
+# Modelo SpaCy
 # ---------------------------
-try:
-    nlp = spacy.load("pt_core_news_sm")
-    st.success("Modelo SpaCy 'pt_core_news_sm' carregado com sucesso!")
-except OSError:
-    nlp = None
-    st.error("Erro ao carregar o modelo SpaCy. Certifique-se de que o modelo 'pt_core_news_lg' esteja instalado.")
-    st.stop()  # Interrompe a execução do app se o modelo não estiver carregado
+nlp = spacy.load("pt_core_news_sm")  # Modelo SpaCy para Português
 
+def predict_with_spacy(text, entity_label):
+    try:
+        doc = nlp(text)
+        entities = [ent.text for ent in doc.ents if ent.label_ == entity_label]
+        return entities
+    except Exception as e:
+        print(f"Erro ao usar SpaCy para {entity_label}: {e}")
+        return []
 
 # ---------------------------
 # Funções de Processamento de Texto
@@ -52,42 +55,24 @@ def extract_text_with_pypdf2(pdf_path):
         text = corrigir_texto(normalize_text(text))
         return text.strip()
     except Exception as e:
-        st.error(f"Erro ao processar PDF: {e}")
+        print(f"Erro ao processar PDF {pdf_path}: {e}")
         return ''
 
 # ---------------------------
-# Funções de Extração de Dados com SpaCy
+# Funções de Extração de Dados
 # ---------------------------
 def extract_information_with_spacy(text):
-    doc = nlp(text)
-    emails = [ent.text for ent in doc.ents if ent.label_ == "EMAIL"]
-    pessoas = [ent.text for ent in doc.ents if ent.label_ == "PER"]
-    cnpjs_cpfs = re.findall(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b|\b\d{3}\.\d{3}\.\d{3}-\d{2}\b", text)
-    
-    return {
-        "nome_autuado": pessoas[0] if pessoas else None,
-        "cnpj_cpf": cnpjs_cpfs[0] if cnpjs_cpfs else None,
-        "socios_advogados": pessoas,
-        "emails": emails
+    info = {
+        "nome_autuado": predict_with_spacy(text, "PER") or None,
+        "cnpj_cpf": predict_with_spacy(text, "MISC") or None,
+        "socios_advogados": predict_with_spacy(text, "ORG") or [],
+        "emails": predict_with_spacy(text, "EMAIL") or [],
     }
+    return info
 
 def extract_addresses_with_spacy(text):
-    doc = nlp(text)
-    addresses = []
-    for ent in doc.ents:
-        if ent.label_ == "LOC":
-            addresses.append(ent.text)
-    return addresses
-
-# ---------------------------
-# Funções de Criação de Documento
-# ---------------------------
-def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    paragrafo = doc.add_paragraph()
-    run = paragrafo.add_run(texto)
-    run.bold = negrito
-    run.font.size = Pt(tamanho)
-    return paragrafo
+    addresses = predict_with_spacy(text, "LOC")
+    return [{"endereco": addr} for addr in addresses]
 
 def extract_process_number(file_name):
     base_name = os.path.splitext(file_name)[0]  # Remove a extensão
@@ -95,6 +80,9 @@ def extract_process_number(file_name):
         base_name = base_name[3:].strip()  # Remove "SEI"
     return base_name
 
+# ---------------------------
+# Função de Geração de Documento
+# ---------------------------
 def gerar_documento_docx(info, enderecos, numero_processo):
     try:
         output_directory = "output"
@@ -109,16 +97,12 @@ def gerar_documento_docx(info, enderecos, numero_processo):
         doc.add_paragraph("\n")
 
         for endereco in enderecos:
-            adicionar_paragrafo(doc, f"Endereço: {endereco}")
+            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+            doc.add_paragraph("\n")
 
-        adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
-        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo}", negrito=True)
-
-        advogado_nome = info.get('socios_advogados', ["[Nome não informado]"])[0]
-        advogado_email = info.get('emails', ["[E-mail não informado]"])[0]
-
-        adicionar_paragrafo(doc, f"Atenciosamente,", negrito=True)
-        adicionar_paragrafo(doc, f"{advogado_nome} – E-mail: {advogado_email}")
+        adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
+        doc.add_paragraph("\n")
+        adicionar_paragrafo(doc, "Informamos que foi proferido julgamento pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias no processo administrativo sancionador em referência.")
 
         doc.save(output_path)
 
@@ -143,13 +127,12 @@ if uploaded_file:
     try:
         file_name = uploaded_file.name
         numero_processo = extract_process_number(file_name)
-
         text = extract_text_with_pypdf2(uploaded_file)
         if text:
             st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
 
-            info = extract_information_with_spacy(text)
-            addresses = extract_addresses_with_spacy(text)
+            info = extract_information_with_spacy(text) or {}
+            addresses = extract_addresses_with_spacy(text) or []
 
             if st.button("Gerar Documento"):
                 gerar_documento_docx(info, addresses, numero_processo)
