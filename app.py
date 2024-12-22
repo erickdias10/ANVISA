@@ -2,7 +2,7 @@
 # Importação de Bibliotecas
 # ---------------------------
 import re
-from PyPDF2 import PdfReader
+import PyPDF2
 import unicodedata
 from docx import Document
 from docx.shared import Pt
