@@ -9,6 +9,3 @@ streamlit
 pytesseract
 pdf2image
 Pillow
-# spacy
-# Incluir o modelo do SpaCy como dependência:
-# pt-core-news-lg @ https://github.com/explosion/spacy-models/releases/download/pt_core_news_lg-3.5.0/pt_core_news_lg-3.5.0.tar.gz
