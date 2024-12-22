@@ -213,7 +213,7 @@ def gerar_documento_docx(info, enderecos, numero_processo):
         doc = Document()
 
         doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, ("Ao(a) Senhor(a):")
+        adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
