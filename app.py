@@ -15,8 +15,12 @@ import streamlit as st
 # ---------------------------
 try:
     nlp = spacy.load("pt_core_news_lg")
-except:
+    st.success("Modelo SpaCy 'pt_core_news_lg' carregado com sucesso!")
+except OSError:
+    nlp = None
     st.error("Erro ao carregar o modelo SpaCy. Certifique-se de que o modelo 'pt_core_news_lg' esteja instalado.")
+    st.stop()  # Interrompe a execução do app se o modelo não estiver carregado
+
 
 # ---------------------------
 # Funções de Processamento de Texto
