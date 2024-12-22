@@ -10,4 +10,3 @@ pytesseract
 pdf2image
 Pillow
 spacy
-pip install -r requirements.txt
