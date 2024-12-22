@@ -11,6 +11,23 @@ import os
 import joblib
 import streamlit as st
 import spacy
+import subprocess
+import sys
+
+# Certifique-se de que o modelo SpaCy esteja baixado
+try:
+    nlp = spacy.load("pt_core_news_sm")
+except OSError:
+    spacy.cli.download("pt_core_news_sm")
+    nlp = spacy.load("pt_core_news_sm")
+
+def install_and_import(package):
+    try:
+        __import__(package)
+    except ImportError:
+        st.warning(f"Instalando o pacote {package}... Isso pode levar alguns minutos.")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        st.success(f"Pacote {package} instalado com sucesso!")
 
 try:
     nlp = spacy.load("pt_core_news_sm")
