@@ -1,3 +1,6 @@
+# ---------------------------
+# Importação de Bibliotecas
+# ---------------------------
 import re
 from PyPDF2 import PdfReader
 import unicodedata
@@ -5,26 +8,13 @@ from docx import Document
 from docx.shared import Pt
 import os
 import streamlit as st
-import subprocess
-import sys
-
-# ---------------------------
-# Certifique-se de que o modelo SpaCy esteja baixado
-# ---------------------------
-def install_spacy_model():
-    try:
-        import spacy
-        spacy.load("pt_core_news_sm")
-    except OSError:
-        subprocess.check_call([sys.executable, "-m", "spacy", "download", "pt_core_news_sm", "--user"])
-
-install_spacy_model()
 import spacy
-nlp = spacy.load("pt_core_news_sm")
 
 # ---------------------------
-# Funções do SpaCy
+# Modelo SpaCy
 # ---------------------------
+nlp = spacy.load("pt_core_news_sm")  # Modelo SpaCy para Português
+
 def predict_with_spacy(text, entity_label):
     try:
         doc = nlp(text)
@@ -55,16 +45,16 @@ def corrigir_texto(texto):
         texto = texto.replace(errado, correto)
     return texto
 
-def extract_text_with_pypdf2(pdf_path):
+def extract_text_with_pypdf2(file):
     try:
-        reader = PdfReader(pdf_path)
+        reader = PdfReader(file)
         text = ""
         for page in reader.pages:
             text += page.extract_text() or ""
         text = corrigir_texto(normalize_text(text))
         return text.strip()
     except Exception as e:
-        print(f"Erro ao processar PDF {pdf_path}: {e}")
+        st.error(f"Erro ao processar PDF: {e}")
         return ''
 
 # ---------------------------
@@ -94,36 +84,21 @@ def extract_process_number(file_name):
 # ---------------------------
 def gerar_documento_docx(info, enderecos, numero_processo):
     try:
-        output_directory = "output"
-        os.makedirs(output_directory, exist_ok=True)
-
-        output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
-
+        # Criação do documento
         doc = Document()
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
-        doc.add_paragraph("\n")
 
-        for endereco in enderecos:
-            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-            doc.add_paragraph("\n")
-
-        adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
         doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "Informamos que foi proferido julgamento pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias no processo administrativo sancionador em referência.")
+        doc.add_paragraph(f"Processo: {numero_processo}")
+        doc.add_paragraph(f"Nome Autuado: {info.get('nome_autuado', '[Não informado]')}")
+        doc.add_paragraph(f"Endereço: {enderecos}")
 
+        # Salvar como arquivo temporário
+        output_path = f"Notificacao_Processo_Nº_{numero_processo}.docx"
         doc.save(output_path)
-
-        with open(output_path, "rb") as file:
-            st.download_button(
-                label="Baixar Documento",
-                data=file,
-                file_name=f"Notificacao_Processo_Nº_{numero_processo}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
+        return output_path
     except Exception as e:
         st.error(f"Erro ao gerar o documento DOCX: {e}")
+        return None
 
 # ---------------------------
 # Interface Streamlit
@@ -144,6 +119,14 @@ if uploaded_file:
             addresses = extract_addresses_with_spacy(text) or []
 
             if st.button("Gerar Documento"):
-                gerar_documento_docx(info, addresses, numero_processo)
+                doc_path = gerar_documento_docx(info, addresses, numero_processo)
+                if doc_path:
+                    with open(doc_path, "rb") as file:
+                        st.download_button(
+                            label="Baixar Documento",
+                            data=file,
+                            file_name=doc_path,
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
     except Exception as e:
         st.error(f"Ocorreu um erro: {e}")
