@@ -1,3 +1,4 @@
+!pip install spacy --upgrade
 # ---------------------------
 # Importação de Bibliotecas
 # ---------------------------
