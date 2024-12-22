@@ -10,6 +10,12 @@ import os
 import streamlit as st
 import spacy
 
+try:
+    nlp = spacy.load("pt_core_news_sm")
+except OSError:
+    os.system("python -m spacy download pt_core_news_sm")
+    nlp = spacy.load("pt_core_news_sm")
+
 # ---------------------------
 # Modelo SpaCy
 # ---------------------------
