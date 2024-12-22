@@ -1,16 +1,4 @@
 # ---------------------------
-# Importação de Bibliotecas
-# ---------------------------
-import re
-# import PyPDF2
-import unicodedata
-from docx import Document
-from docx.shared import Pt
-import os
-import spacy
-import streamlit as st
-
-# ---------------------------
 # Carregando o Modelo SpaCy
 # ---------------------------
 @st.cache_resource
