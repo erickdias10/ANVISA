@@ -10,16 +10,14 @@ import os
 import streamlit as st
 import spacy
 
-try:
-    nlp = spacy.load("pt_core_news_sm")
-except OSError:
-    os.system("python -m spacy download pt_core_news_sm")
-    nlp = spacy.load("pt_core_news_sm")
-
 # ---------------------------
 # Modelo SpaCy
 # ---------------------------
-nlp = spacy.load("pt_core_news_sm")  # Modelo SpaCy para Português
+try:
+    nlp = spacy.load("pt_core_news_lg")
+except OSError:
+    os.system("python -m spacy download pt_core_news_lg")
+    nlp = spacy.load("pt_core_news_lg")
 
 def predict_with_spacy(text, entity_label):
     try:
@@ -27,7 +25,7 @@ def predict_with_spacy(text, entity_label):
         entities = [ent.text for ent in doc.ents if ent.label_ == entity_label]
         return entities
     except Exception as e:
-        print(f"Erro ao usar SpaCy para {entity_label}: {e}")
+        st.error(f"Erro ao usar SpaCy para {entity_label}: {e}")
         return []
 
 # ---------------------------
