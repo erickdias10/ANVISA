@@ -108,7 +108,7 @@ def extract_process_number(file_name):
 # ---------------------------
 # Função de Geração de Documento
 # ---------------------------
-def gerar_documento_docx(info, enderecos, numero_processo):
+def gerar_documento_streamlit(info, enderecos, numero_processo):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
 
