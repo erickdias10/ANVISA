@@ -132,8 +132,8 @@ def generate_pdf(driver):
     finally:
         # Volta para o contexto principal (caso queira)
         driver.switch_to.default_content()
-        time.sleep(5)
 
+        time.sleep(5)
 
 def download_pdf(driver, option="Todos os documentos disponíveis"):
     """
@@ -173,7 +173,7 @@ def download_pdf(driver, option="Todos os documentos disponíveis"):
                     break
             else:
                 logging.warning(f"Opção '{option}' não encontrada. Prosseguindo sem selecionar opção.")
-        except:
+        except TimeoutException:
             logging.warning("Opções de download não apareceram. Prosseguindo...")
 
         # Aguardar o início do download
@@ -229,7 +229,6 @@ if __name__ == "__main__":
         print(result)
     except Exception as ex:
         print(f"Ocorreu um erro: {ex}")
-
 
 import os
 import re
@@ -427,9 +426,8 @@ def gerar_documento_streamlit(info, enderecos, numero_processo):
         print(f"Erro ao gerar o documento DOCX: {e}")
         return None
 
-
 # ---------------------------
-# Execução Principal (sem Streamlit) - Mantido sem alterações
+# Execução Principal (sem Streamlit)
 # ---------------------------
 def main():
     # Diretório de downloads (ajuste para o caminho correto no seu sistema)
