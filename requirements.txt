@@ -4,5 +4,4 @@ webdriver-manager
 PyPDF2
 python-docx
 spacy
-pt_core_news_lg==3.8.0
 nest_asyncio
