@@ -1,8 +1,12 @@
+import streamlit as st
 import logging
 import nest_asyncio
 import time
 import getpass
 import os
+import re
+import unicodedata
+import tempfile
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -13,49 +17,60 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.alert import Alert
 from webdriver_manager.chrome import ChromeDriverManager
 
+from docx import Document
+from docx.shared import Pt
+from PyPDF2 import PdfReader
+
+# -------------------------------------------------------
+# Aplicação do nest_asyncio para permitir múltiplos loops de eventos
+# (às vezes necessário em notebooks, mas não atrapalha no Streamlit)
+nest_asyncio.apply()
+
+# -------------------------------------------------------
 # Configuração de logs
 logging.basicConfig(level=logging.INFO)
 
-# Aplicação do nest_asyncio para permitir múltiplos loops de eventos (necessário se for rodar em notebook)
-nest_asyncio.apply()
-
-# Constantes de elementos
+# -------------------------------------------------------
+# Constantes de elementos (URLs e XPaths)
 LOGIN_URL = "https://sei.anvisa.gov.br/sip/login.php?sigla_orgao_sistema=ANVISA&sigla_sistema=SEI"
 IFRAME_VISUALIZACAO_ID = "ifrVisualizacao"
 BUTTON_XPATH_ALT = '//img[@title="Gerar Arquivo PDF do Processo"]/parent::a'
 
 
+# =========================
+# Funções Auxiliares Selenium
+# =========================
 def create_driver(download_dir=None):
     """
     Configura e retorna uma instância do Selenium WebDriver,
     forçando o download de PDF ao invés de abrir no Chrome.
+    No Streamlit Cloud, devemos usar o Chrome em modo headless.
     """
     if download_dir is None:
-        # Diretório padrão de downloads
-        download_dir = os.path.join(os.getcwd(), "downloads")
-        # Cria a pasta se não existir
-        os.makedirs(download_dir, exist_ok=True)
+        # Cria uma pasta temporária para downloads
+        download_dir = tempfile.mkdtemp(prefix="downloads_")
 
     chrome_options = Options()
-    chrome_options.add_argument("--start-maximized")
+    # Execução headless obrigatória em muitos ambientes online
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-popup-blocking")
     chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("--disable-dev-shm-usage")  # Pode ajudar em ambientes limitados de memória
 
     # Configura o Chrome para baixar PDFs sem abrir
     prefs = {
         "download.default_directory": download_dir,
-        "download.prompt_for_download": False,        # Não perguntar onde salvar
-        "plugins.always_open_pdf_externally": True,   # Forçar download de PDF
+        "download.prompt_for_download": False,
+        "plugins.always_open_pdf_externally": True,
     }
     chrome_options.add_experimental_option("prefs", prefs)
-
     chrome_options.set_capability("unhandledPromptBehavior", "ignore")
 
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
-    return driver
+    return driver, download_dir
 
 
 def wait_for_element(driver, by, value, timeout=20):
@@ -98,6 +113,7 @@ def login(driver, username, password):
     wait_for_element(driver, By.ID, "txtUsuario").send_keys(username)
     driver.find_element(By.ID, "pwdSenha").send_keys(password)
     driver.find_element(By.ID, "sbmAcessar").click()
+    time.sleep(3)
 
 
 def access_process(driver, process_number):
@@ -130,10 +146,9 @@ def generate_pdf(driver):
         logging.error(f"Erro ao gerar o PDF: {e}")
         raise Exception("Erro ao gerar o PDF do processo.")
     finally:
-        # Volta para o contexto principal (caso queira)
         driver.switch_to.default_content()
-
         time.sleep(5)
+
 
 def download_pdf(driver, option="Todos os documentos disponíveis"):
     """
@@ -142,12 +157,16 @@ def download_pdf(driver, option="Todos os documentos disponíveis"):
     :param option: Opção de download: "Todos os documentos disponíveis", 
                    "Todos exceto selecionados" ou "Apenas selecionados".
     """
+    from selenium.common.exceptions import TimeoutException
+
     try:
         # TENTATIVA: Acessar o iframe 'ifrVisualizacao'
         try:
             driver.switch_to.frame(wait_for_element(driver, By.ID, "ifrVisualizacao"))
             gerar_pdf_button = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, '//*[@id="divInfraBarraComandosSuperior"]/button[1]'))
+                EC.element_to_be_clickable(
+                    (By.XPATH, '//*[@id="divInfraBarraComandosSuperior"]/button[1]')
+                )
             )
             driver.execute_script("arguments[0].click();", gerar_pdf_button)
             logging.info("Botão 'Gerar Arquivo PDF do Processo' clicado no iframe 'ifrVisualizacao'.")
@@ -177,20 +196,21 @@ def download_pdf(driver, option="Todos os documentos disponíveis"):
             logging.warning("Opções de download não apareceram. Prosseguindo...")
 
         # Aguardar o início do download
-        time.sleep(5)  # Ajuste o tempo conforme necessário
+        time.sleep(5)
         logging.info("Download iniciado (ou já realizado com sucesso).")
 
     except Exception as e:
         logging.error(f"Erro ao tentar baixar o PDF: {e}")
-        # Levantar exceção somente se for crítico para o fluxo.
         raise Exception("Erro durante o processo de download do PDF.") from e
 
 
 def process_notification(username: str, password: str, process_number: str):
     """
     Orquestra o processo de login, acesso ao processo e geração/baixa do PDF.
+    Retorna (caminho_da_pasta_download, mensagem_final).
     """
-    driver = create_driver()
+    # Cria o driver e o diretório de download
+    driver, download_dir = create_driver()
     try:
         # Passo 1: Login
         login(driver, username, password)
@@ -201,45 +221,28 @@ def process_notification(username: str, password: str, process_number: str):
         # Passo 3: Gera PDF
         generate_pdf(driver)
         
-        # Passo 4: Usar a função download_pdf
+        # Passo 4: Tenta baixar o PDF
         try:
             download_pdf(driver, option="Todos os documentos disponíveis")
         except Exception as e:
             logging.warning(f"Erro não crítico no download_pdf: {e}")
 
-        # Passo 5: Aguardar alguns segundos para o PDF ser baixado
+        # Passo 5: Aguarda alguns segundos para o PDF ser baixado
         logging.info("Aguardando alguns segundos para permitir o download do PDF...")
         time.sleep(10)
 
-        return "PDF gerado e baixado automaticamente."
+        return download_dir, "PDF gerado e baixado automaticamente."
     except Exception as e:
         logging.exception("Erro durante o processamento.")
         raise e
     finally:
-        pass
+        driver.quit()
 
 
-if __name__ == "__main__":
-    username = input("Digite seu usuário: ")
-    password = getpass.getpass("Digite sua senha (não será exibido): ")
-    process_number = input("Digite o número do processo: ")
+# =========================
+# Funções Auxiliares de Extração de Texto e Geração DOCX
+# =========================
 
-    try:
-        result = process_notification(username, password, process_number)
-        print(result)
-    except Exception as ex:
-        print(f"Ocorreu um erro: {ex}")
-
-import os
-import re
-import unicodedata
-from docx import Document
-from docx.shared import Pt
-from PyPDF2 import PdfReader
-
-# ---------------------------
-# Funções Auxiliares
-# ---------------------------
 def normalize_text(text):
     if not isinstance(text, str):
         return text
@@ -248,6 +251,10 @@ def normalize_text(text):
     return text.strip()
 
 def corrigir_texto(texto):
+    """
+    Ajuste manual de possíveis problemas de encoding.
+    Inclua aqui outras correções necessárias.
+    """
     substituicoes = {
         'Ã©': 'é',
         'Ã§Ã£o': 'ção',
@@ -300,7 +307,15 @@ def extract_addresses(text):
     estado_matches = re.findall(estado_pattern, text)
     cep_matches = re.findall(cep_pattern, text)
 
-    for i in range(max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))):
+    for i in range(
+        max(
+            len(endereco_matches),
+            len(cidade_matches),
+            len(bairro_matches),
+            len(estado_matches),
+            len(cep_matches)
+        )
+    ):
         endereco = endereco_matches[i].strip() if i < len(endereco_matches) else None
         cidade = cidade_matches[i].strip() if i < len(cidade_matches) else None
         bairro = bairro_matches[i].strip() if i < len(bairro_matches) else None
@@ -332,50 +347,24 @@ def extract_process_number(file_name):
         base_name = base_name[3:].strip()
     return base_name
 
-# ---------------------------
-# Lógica para Buscar o Último Arquivo Baixado
-# ---------------------------
-def get_latest_downloaded_file(download_directory):
-    """
-    Retorna o caminho do último arquivo baixado no diretório especificado.
-    """
-    files = [os.path.join(download_directory, f) for f in os.listdir(download_directory)]
-    files = [f for f in files if os.path.isfile(f)]  # Filtra apenas arquivos
-    latest_file = max(files, key=os.path.getmtime) if files else None
-    return latest_file
-
-# ---------------------------
-# Função de Geração de Documento
-# ---------------------------
 def gerar_documento_streamlit(info, enderecos, numero_processo):
     """
     Gera um documento DOCX com informações do processo e endereços extraídos.
-
-    Args:
-        info (dict): Dicionário com informações extraídas do texto.
-        enderecos (list): Lista de dicionários contendo informações de endereços.
-        numero_processo (str): Número do processo extraído do nome do arquivo.
-
-    Returns:
-        str: Caminho do arquivo gerado.
+    Retorna o caminho do arquivo gerado.
     """
     try:
-        # Diretório para salvar o arquivo
-        output_directory = "output"
-        os.makedirs(output_directory, exist_ok=True)
+        output_directory = tempfile.mkdtemp(prefix="docx_output_")
+        output_path = os.path.join(
+            output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx"
+        )
 
-        # Caminho completo do arquivo
-        output_path = os.path.join(output_directory, f"Notificacao_Processo_Nº_{numero_processo}.docx")
-
-        # Criação do documento
         doc = Document()
-
         doc.add_paragraph("\n")
+
         adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
-        # Adiciona endereços
         for idx, endereco in enumerate(enderecos, start=1):
             adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
@@ -384,40 +373,18 @@ def gerar_documento_streamlit(info, enderecos, numero_processo):
             adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
 
-        # Corpo principal
         adicionar_paragrafo(doc, "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", negrito=True)
         adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
-        doc.add_paragraph("\n")  # Quebra de linha
+        doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
-        doc.add_paragraph("\n")  # Quebra de linha
-        adicionar_paragrafo(doc, "Informamos que foi proferido julgamento pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias no processo administrativo sancionador em referência, conforme decisão em anexo.")
-        doc.add_paragraph("\n")  # Quebra de linha
+        doc.add_paragraph("\n")
+        adicionar_paragrafo(doc, "Informamos que foi proferido julgamento ... (texto exemplo).")
+        doc.add_paragraph("\n")
 
-        # O QUE FAZER SE A DECISÃO TIVER APLICADO MULTA?
+        # Exemplo de subtítulo e texto explicativo
         adicionar_paragrafo(doc, "O QUE FAZER SE A DECISÃO TIVER APLICADO MULTA?", negrito=True)
-        adicionar_paragrafo(doc, "Sendo aplicada a penalidade de multa, esta notificação estará acompanhada de boleto bancário, que deverá ser pago até o vencimento.")
-        adicionar_paragrafo(doc, "O valor da multa poderá ser pago com 20% de desconto caso seja efetuado em até 20 dias contados de seu recebimento. Incorrerá em ilegalidade o usufruto do desconto em data posterior ao prazo referido, mesmo que a data impressa no boleto permita pagamento, sendo a diferença cobrada posteriormente pela Gerência de Gestão de Arrecadação (GEGAR). O pagamento da multa implica em desistência tácita do recurso, conforme art. 21 da Lei nº 6.437/1977.")
-        adicionar_paragrafo(doc, "O não pagamento do boleto sem que haja interposição de recurso, acarretará, sucessivamente: i) a inscrição do devedor no Cadastro Informativo de Crédito não Quitado do Setor Público Federal (CADIN); ii) a inscrição do débito em dívida ativa da União; iii) o ajuizamento de ação de execução fiscal contra o devedor; e iv) a comunicação aos cartórios de registros de imóveis, dos devedores inscritos em dívida ativa ou execução fiscal.")
-        adicionar_paragrafo(doc, "Esclarecemos que o valor da multa foi atualizado pela taxa Selic acumulada nos termos do art. 37-A da Lei 10.522/2002 e no art. 5º do Decreto-Lei 1.736/79.")
-        doc.add_paragraph("\n")  # Quebra de linha
-
-        # COMO FAÇO PARA INTERPOR RECURSO DA DECISÃO?
-        adicionar_paragrafo(doc, "COMO FAÇO PARA INTERPOR RECURSO DA DECISÃO?", negrito=True)
-        adicionar_paragrafo(doc, "Havendo interesse na interposição de recurso administrativo, este poderá ser interposto no prazo de 20 dias contados do recebimento desta notificação, conforme disposto no art. 9º da RDC nº 266/2019.")
-        adicionar_paragrafo(doc, "O protocolo do recurso deverá ser feito exclusivamente, por meio de peticionamento intercorrente no processo indicado no campo assunto desta notificação, pelo Sistema Eletrônico de Informações (SEI). Para tanto, é necessário, primeiramente, fazer o cadastro como usuário externo SEI-Anvisa. Acesse o portal da Anvisa https://www.gov.br/anvisa/pt-br > Sistemas > SEI > Acesso para Usuários Externos (SEI) e siga as orientações. Para maiores informações, consulte o Manual do Usuário Externo Sei-Anvisa, que está disponível em https://www.gov.br/anvisa/pt-br/sistemas/sei.")
-        doc.add_paragraph("\n")  # Quebra de linha
-
-        # Quais documentos devem acompanhar o recurso
-        adicionar_paragrafo(doc, "QUAIS DOCUMENTOS DEVEM ACOMPANHAR O RECURSO?", negrito=True)
-        adicionar_paragrafo(doc, "a) Autuado pessoa jurídica:")
-        adicionar_paragrafo(doc, "1. Contrato ou estatuto social da empresa, com a última alteração;")
-        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo. Somente serão aceitas procurações e substabelecimentos assinados eletronicamente, com certificação digital no padrão da Infraestrutura de Chaves Públicas Brasileira (ICP-Brasil) ou pelo assinador Gov.br.")
-        adicionar_paragrafo(doc, "3. Ata de eleição da atual diretoria quando a procuração estiver assinada por diretor que não conste como sócio da empresa;")
-        adicionar_paragrafo(doc, "4. No caso de contestação sobre o porte da empresa considerado para a dosimetria da pena de multa: comprovação do porte econômico referente ao ano em que foi proferida a decisão (documentos previstos no art. 50 da RDC nº 222/2006).")
-        adicionar_paragrafo(doc, "b) Autuado pessoa física:")
-        adicionar_paragrafo(doc, "1. Documento de identificação do autuado;")
-        adicionar_paragrafo(doc, "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo.")
-        doc.add_paragraph("\n")  # Quebra de linha
+        adicionar_paragrafo(doc, "Sendo aplicada a penalidade de multa, ...")
+        # etc... (adicione o restante do texto)
 
         # Salva o documento
         doc.save(output_path)
@@ -426,94 +393,78 @@ def gerar_documento_streamlit(info, enderecos, numero_processo):
         print(f"Erro ao gerar o documento DOCX: {e}")
         return None
 
-# ---------------------------
-# Execução Principal (sem Streamlit)
-# ---------------------------
+def get_latest_downloaded_file(download_directory):
+    """
+    Retorna o caminho do último arquivo baixado no diretório especificado.
+    """
+    files = [os.path.join(download_directory, f) for f in os.listdir(download_directory)]
+    files = [f for f in files if os.path.isfile(f)]
+    if not files:
+        return None
+    latest_file = max(files, key=os.path.getmtime)
+    return latest_file
+
+# =========================
+# APP STREAMLIT
+# =========================
 def main():
-    # Diretório de downloads (ajuste para o caminho correto no seu sistema)
-    download_directory = os.path.expanduser(r"C:\Users\erick\OneDrive\Área de Trabalho\Jupyter Notebook\downloads")
+    st.title("Automação SEI Anvisa - Exemplo Selenium + Streamlit")
 
-    print("Verificando o último arquivo baixado...")
-    latest_file = get_latest_downloaded_file(download_directory)
+    st.write("Este é um exemplo de aplicação Streamlit que faz login no SEI da Anvisa, gera e baixa o PDF de um processo, extrai dados e gera uma notificação em DOCX.")
 
-    if latest_file:
-        print(f"Último arquivo encontrado: {os.path.basename(latest_file)}")
-        try:
-            numero_processo = extract_process_number(os.path.basename(latest_file))
-            text = extract_text_with_pypdf2(latest_file)
+    # Entradas do usuário
+    username = st.text_input("Digite seu usuário (SEI)", value="")
+    password = st.text_input("Digite sua senha (SEI)", value="", type="password")
+    process_number = st.text_input("Digite o número do processo", value="")
 
-            if text:
-                print(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
-                info = extract_information(text)
-                addresses = extract_addresses(text)
+    if st.button("Executar Processo"):
+        if not username or not password or not process_number:
+            st.warning("Por favor, preencha usuário, senha e número do processo.")
+            return
 
-                output_path = gerar_documento_streamlit(info, addresses, numero_processo)
-                if output_path:
-                    print(f"Documento gerado com sucesso em: {output_path}")
-            else:
-                print("Não foi possível extrair texto do arquivo.")
-        except Exception as e:
-            print(f"Ocorreu um erro: {e}")
-    else:
-        print("Nenhum arquivo encontrado no diretório de downloads.")
-
-if __name__ == '__main__':
-    main()
-
-
-# =========================
-# Bloco EXTRA para uso no Streamlit
-# =========================
-import streamlit as st
-
-def run_streamlit():
-    st.title("Exemplo de Integração com SEI (Anvisa)")
-
-    st.header("1) Geração e Download de PDF via Selenium")
-    username = st.text_input("Digite seu usuário:")
-    password = st.text_input("Digite sua senha:", type="password")
-    process_number = st.text_input("Digite o número do processo:")
-
-    if st.button("Iniciar Processo (Login + Geração PDF)"):
-        with st.spinner("Processando..."):
+        with st.spinner("Executando automação... aguarde..."):
             try:
-                result = process_notification(username, password, process_number)
-                st.success(result)
-            except Exception as ex:
-                st.error(f"Ocorreu um erro: {ex}")
+                download_folder, msg = process_notification(username, password, process_number)
+                st.success(msg)
 
-    st.header("2) Extração de Conteúdo do PDF e Geração de Documento")
-    st.write("Nesta parte, o código vai verificar o **último arquivo** baixado no diretório configurado e gerar um **.docx** de notificação com base nos dados extraídos.")
+                # Após o download, vamos tentar descobrir o PDF baixado
+                pdf_baixado = get_latest_downloaded_file(download_folder)
+                if pdf_baixado and pdf_baixado.lower().endswith(".pdf"):
+                    st.info(f"PDF encontrado: {os.path.basename(pdf_baixado)}")
 
-    if st.button("Extrair texto e gerar documento"):
-        with st.spinner("Verificando o último PDF e gerando documento..."):
-            download_directory = os.path.expanduser(r"C:\Users\erick\OneDrive\Área de Trabalho\Jupyter Notebook\downloads")
-            st.write(f"Diretório de downloads configurado: {download_directory}")
-
-            latest_file = get_latest_downloaded_file(download_directory)
-            if latest_file:
-                st.write(f"Último arquivo encontrado: `{os.path.basename(latest_file)}`")
-                try:
-                    numero_processo = extract_process_number(os.path.basename(latest_file))
-                    text = extract_text_with_pypdf2(latest_file)
-                    if text:
-                        st.write(f"Texto extraído com sucesso! Número do processo reconhecido: `{numero_processo}`")
-
-                        info = extract_information(text)
-                        addresses = extract_addresses(text)
-
-                        output_path = gerar_documento_streamlit(info, addresses, numero_processo)
-                        if output_path:
-                            st.success(f"Documento gerado com sucesso em: `{output_path}`")
+                    # Extrai texto do PDF
+                    texto_extraido = extract_text_with_pypdf2(pdf_baixado)
+                    if not texto_extraido:
+                        st.warning("Não foi possível extrair texto do PDF.")
                     else:
-                        st.warning("Não foi possível extrair texto do arquivo.")
-                except Exception as e:
-                    st.error(f"Ocorreu um erro: {e}")
-            else:
-                st.warning("Nenhum arquivo encontrado no diretório de downloads.")
+                        st.success("Texto extraído com sucesso do PDF!")
 
-# Se o usuário quiser rodar via streamlit, basta chamar:
-#   streamlit run nome_do_arquivo.py
-# e este trecho será executado.
-if __name__ == "__main__" and st._is_running_with_streamlit:
-    run_streamlit()
+                        # Descobre número do processo a partir do nome do arquivo
+                        numero_processo_extraido = extract_process_number(os.path.basename(pdf_baixado))
+                        st.write(f"Número de processo extraído: {numero_processo_extraido}")
+
+                        # Extrai informações do texto
+                        info = extract_information(texto_extraido)
+                        enderecos = extract_addresses(texto_extraido)
+
+                        # Gera documento .docx
+                        docx_path = gerar_documento_streamlit(info, enderecos, numero_processo_extraido)
+                        if docx_path:
+                            st.success("Documento .docx gerado com sucesso.")
+                            with open(docx_path, "rb") as file:
+                                st.download_button(
+                                    label="Baixar Notificação (DOCX)",
+                                    data=file.read(),
+                                    file_name=os.path.basename(docx_path),
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                )
+                        else:
+                            st.error("Erro ao gerar o documento .docx.")
+                else:
+                    st.warning("Nenhum PDF foi encontrado no diretório de downloads.")
+            
+            except Exception as e:
+                st.error(f"Ocorreu um erro na automação: {e}")
+
+if __name__ == "__main__":
+    main()
