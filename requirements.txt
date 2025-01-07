@@ -3,5 +3,6 @@ selenium
 webdriver-manager
 PyPDF2
 python-docx
-spacy
 nest_asyncio
+spacy
+pt_core_news_sm==3.8.0
