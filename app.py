@@ -380,6 +380,9 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo):
             "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo."
         )
         doc.add_paragraph("\n")
+        
+        except Exception as e:
+            logger.error(f"Erro ao gerar o documento no modelo 2: {e}")
 
     def _gerar_modelo_2(doc, info, enderecos, numero_processo):
         try:
