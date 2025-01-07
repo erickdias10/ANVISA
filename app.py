@@ -22,6 +22,17 @@ from PyPDF2 import PdfReader
 from docx import Document
 from docx.shared import Pt
 
+def load_spacy_model():
+    model_name = "pt_core_news_lg"
+    if not spacy.util.is_package(model_name):
+        from spacy.cli import download
+        download(model_name)
+    return spacy.load(model_name)
+
+# Carregar o modelo
+nlp = load_spacy_model()
+
+
 # Aplicação do nest_asyncio para permitir múltiplos loops de eventos (necessário se for rodar em notebook)
 nest_asyncio.apply()
 
