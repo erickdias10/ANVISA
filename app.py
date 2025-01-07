@@ -380,54 +380,56 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo):
             "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo."
         )
         doc.add_paragraph("\n")
-    
-    def _gerar_modelo_2(doc, info, enderecos, numero_processo):
-        try:
-            doc.add_paragraph("\n")
-            adicionar_paragrafo(doc, "MODELO 2 - Ao(a) Senhor(a):")
-            adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+    except Exception as e:
+        logger.error(f"Erro ao gerar o documento no modelo 1: {e}")
+
+def _gerar_modelo_2(doc, info, enderecos, numero_processo):
+    try:
+        doc.add_paragraph("\n")
+        adicionar_paragrafo(doc, "MODELO 2 - Ao(a) Senhor(a):")
+        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+        doc.add_paragraph("\n")
+
+        for endereco in enderecos:
+            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
 
-            for endereco in enderecos:
-                adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-                doc.add_paragraph("\n")
+        adicionar_paragrafo(doc, "Assunto: Modelo 2 - Detalhes Específicos.", negrito=True)
+        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
+        doc.add_paragraph("\n")
+        adicionar_paragrafo(doc, "Este é o modelo 2 do documento.")
+        doc.add_paragraph("\n")
 
-            adicionar_paragrafo(doc, "Assunto: Modelo 2 - Detalhes Específicos.", negrito=True)
-            adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
-            doc.add_paragraph("\n")
-            adicionar_paragrafo(doc, "Este é o modelo 2 do documento.")
-            doc.add_paragraph("\n")
+    except Exception as e:
+        logger.error(f"Erro ao gerar o documento no modelo 2: {e}")
 
-        except Exception as e:
-            logger.error(f"Erro ao gerar o documento no modelo 2: {e}")
+def _gerar_modelo_3(doc, info, enderecos, numero_processo):
+    try:
+        doc.add_paragraph("\n")
+        adicionar_paragrafo(doc, "MODELO 3 - Ao(a) Senhor(a):")
+        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+        doc.add_paragraph("\n")
 
-    def _gerar_modelo_3(doc, info, enderecos, numero_processo):
-        try:
-            doc.add_paragraph("\n")
-            adicionar_paragrafo(doc, "MODELO 3 - Ao(a) Senhor(a):")
-            adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
-            doc.add_paragraph("\n")
-
-            for endereco in enderecos:
-                adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-                adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-                doc.add_paragraph("\n")
-
-            adicionar_paragrafo(doc, "Assunto: Modelo 3 - Informações Personalizadas.", negrito=True)
-            adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
-            doc.add_paragraph("\n")
-            adicionar_paragrafo(doc, "Este é o modelo 3 do documento.")
+        for endereco in enderecos:
+            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
 
-        except Exception as e:
-            logger.error(f"Erro ao gerar o documento no modelo 3: {e}")
+        adicionar_paragrafo(doc, "Assunto: Modelo 3 - Informações Personalizadas.", negrito=True)
+        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
+        doc.add_paragraph("\n")
+        adicionar_paragrafo(doc, "Este é o modelo 3 do documento.")
+        doc.add_paragraph("\n")
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar o documento no modelo 3: {e}")
 
 def escolher_enderecos(enderecos):
     if not enderecos:
