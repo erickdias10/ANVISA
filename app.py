@@ -22,17 +22,6 @@ from PyPDF2 import PdfReader
 from docx import Document
 from docx.shared import Pt
 
-def load_spacy_model():
-    model_name = "pt_core_news_lg"
-    if not spacy.util.is_package(model_name):
-        from spacy.cli import download
-        download(model_name)
-    return spacy.load(model_name)
-
-# Carregar o modelo
-nlp = load_spacy_model()
-
-
 # Aplicação do nest_asyncio para permitir múltiplos loops de eventos (necessário se for rodar em notebook)
 nest_asyncio.apply()
 
@@ -40,10 +29,14 @@ nest_asyncio.apply()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
-# Carregar o modelo spaCy para português
-@st.cache_resource
+# Função para carregar o modelo spaCy
 def load_spacy_model():
-    return spacy.load("pt_core_news_lg")
+    model_name = "pt_core_news_lg"
+    if not spacy.util.is_package(model_name):
+        from spacy.cli import download
+        with st.spinner("Baixando modelo spaCy (isso pode levar alguns minutos)..."):
+            download(model_name)
+    return spacy.load(model_name)
 
 nlp = load_spacy_model()
 
@@ -52,7 +45,7 @@ LOGIN_URL = "https://sei.anvisa.gov.br/sip/login.php?sigla_orgao_sistema=ANVISA&
 IFRAME_VISUALIZACAO_ID = "ifrVisualizacao"
 BUTTON_XPATH_ALT = '//img[@title="Gerar Arquivo PDF do Processo"]/parent::a'
 
-# Funções existentes (sem alterações na lógica principal)
+# Funções existentes
 def create_driver(download_dir=None):
     if download_dir is None:
         # Usar um diretório temporário
@@ -185,7 +178,7 @@ def process_notification(username: str, password: str, process_number: str, down
     finally:
         driver.quit()
 
-# Funções Auxiliares (sem alterações na lógica principal)
+# Funções Auxiliares
 def normalize_text(text):
     if not isinstance(text, str):
         return text
