@@ -27,7 +27,7 @@ nest_asyncio.apply()
 
 # Configuração de logs para Streamlit
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # Função para carregar o modelo spaCy
 def load_spacy_model():
@@ -293,17 +293,6 @@ def extract_process_number(file_name):
         base_name = base_name[3:].strip()
     return base_name
 
-def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    paragrafo = doc.add_paragraph()
-    run = paragrafo.add_run(texto)
-    run.bold = negrito
-    run.font.size = Pt(tamanho)
-    return paragrafo
-
-    # Configuração de logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 def _gerar_modelo_1(doc, info, enderecos, numero_processo):
     try:
         doc.add_paragraph("\n")
@@ -391,132 +380,184 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo):
             "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo."
         )
         doc.add_paragraph("\n")
-        
+    
+    def _gerar_modelo_2(doc, info, enderecos, numero_processo):
+        try:
+            doc.add_paragraph("\n")
+            adicionar_paragrafo(doc, "MODELO 2 - Ao(a) Senhor(a):")
+            adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+            doc.add_paragraph("\n")
+
+            for endereco in enderecos:
+                adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
+                doc.add_paragraph("\n")
+
+            adicionar_paragrafo(doc, "Assunto: Modelo 2 - Detalhes Específicos.", negrito=True)
+            adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
+            doc.add_paragraph("\n")
+            adicionar_paragrafo(doc, "Este é o modelo 2 do documento.")
+            doc.add_paragraph("\n")
+
         except Exception as e:
             logger.error(f"Erro ao gerar o documento no modelo 2: {e}")
 
-
-def _gerar_modelo_2(doc, info, enderecos, numero_processo):
-    try:
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "MODELO 2 - Ao(a) Senhor(a):")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
-        doc.add_paragraph("\n")
-
-        for endereco in enderecos:
-            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-            doc.add_paragraph("\n")
-
-        adicionar_paragrafo(doc, "Assunto: Modelo 2 - Detalhes Específicos.", negrito=True)
-        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "Este é o modelo 2 do documento.")
-        doc.add_paragraph("\n")
-
-    except Exception as e:
-        logger.error(f"Erro ao gerar o documento no modelo 2: {e}")
-
-def _gerar_modelo_3(doc, info, enderecos, numero_processo):
-    try:
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "MODELO 3 - Ao(a) Senhor(a):")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
-        doc.add_paragraph("\n")
-
-        for endereco in enderecos:
-            adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
-            adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
-            doc.add_paragraph("\n")
-
-        adicionar_paragrafo(doc, "Assunto: Modelo 3 - Informações Personalizadas.", negrito=True)
-        adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
-        doc.add_paragraph("\n")
-        adicionar_paragrafo(doc, "Este é o modelo 3 do documento.")
-        doc.add_paragraph("\n")
-
-    except Exception as e:
-        logger.error(f"Erro ao gerar o documento no modelo 3: {e}")
-
-    def escolher_enderecos(enderecos):
-        if not enderecos:
-            st.warning("Nenhum endereço encontrado para editar.")
-            return []
-
-        selected_addresses = []
-        st.subheader("Endereços Detectados")
-
-        for i, end in enumerate(enderecos, start=1):
-            with st.expander(f"Endereço {i}"):
-                st.write(f"**Endereço:** {end['endereco']}")
-                st.write(f"**Cidade:** {end['cidade']}")
-                st.write(f"**Bairro:** {end['bairro']}")
-                st.write(f"**Estado:** {end['estado']}")
-                st.write(f"**CEP:** {end['cep']}")
-
-                keep = st.checkbox(f"Deseja manter este endereço? (Endereço {i})", value=True, key=f"keep_{i}")
-                if keep:
-                    edit = st.checkbox(f"Deseja editar este endereço? (Endereço {i})", key=f"edit_{i}")
-                    if edit:
-                        end['endereco'] = st.text_input(f"Endereço [{end['endereco']}]:", value=end['endereco'], key=f"endereco_{i}")
-                        end['cidade'] = st.text_input(f"Cidade [{end['cidade']}]:", value=end['cidade'], key=f"cidade_{i}")
-                        end['bairro'] = st.text_input(f"Bairro [{end['bairro']}]:", value=end['bairro'], key=f"bairro_{i}")
-                        end['estado'] = st.text_input(f"Estado [{end['estado']}]:", value=end['estado'], key=f"estado_{i}")
-                        end['cep'] = st.text_input(f"CEP [{end['cep']}]:", value=end['cep'], key=f"cep_{i}")
-                    selected_addresses.append(end)
-
-        return selected_addresses
-
-    def get_latest_downloaded_file(download_directory):
+    def _gerar_modelo_3(doc, info, enderecos, numero_processo):
         try:
-            files = [os.path.join(download_directory, f) for f in os.listdir(download_directory) if os.path.isfile(os.path.join(download_directory, f))]
-            files = [f for f in files if f.lower().endswith('.pdf')]
-            latest_file = max(files, key=os.path.getmtime) if files else None
-            return latest_file
+            doc.add_paragraph("\n")
+            adicionar_paragrafo(doc, "MODELO 3 - Ao(a) Senhor(a):")
+            adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+            doc.add_paragraph("\n")
+
+            for endereco in enderecos:
+                adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"Estado: {endereco.get('estado', '[Não informado]')}")
+                adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
+                doc.add_paragraph("\n")
+
+            adicionar_paragrafo(doc, "Assunto: Modelo 3 - Informações Personalizadas.", negrito=True)
+            adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº: {numero_processo} ", negrito=True)
+            doc.add_paragraph("\n")
+            adicionar_paragrafo(doc, "Este é o modelo 3 do documento.")
+            doc.add_paragraph("\n")
+
         except Exception as e:
-            logger.error(f"Erro ao acessar o diretório de downloads: {e}")
-            return None
+            logger.error(f"Erro ao gerar o documento no modelo 3: {e}")
 
-    # Interface do Streamlit
-    def main():
-        st.title("Automação de Notificações SEI-Anvisa")
+def escolher_enderecos(enderecos):
+    if not enderecos:
+        st.warning("Nenhum endereço encontrado para editar.")
+        return []
 
-        st.sidebar.header("Configurações")
+    selected_addresses = []
+    st.subheader("Endereços Detectados")
 
-        # Inputs do Usuário
-        username = st.sidebar.text_input("Usuário")
-        password = st.sidebar.text_input("Senha", type="password")
-        process_number = st.sidebar.text_input("Número do Processo")
-        # Diretório de downloads será um diretório temporário
-        download_directory = tempfile.mkdtemp(prefix="downloads_")
+    for i, end in enumerate(enderecos, start=1):
+        with st.expander(f"Endereço {i}"):
+            st.write(f"**Endereço:** {end['endereco']}")
+            st.write(f"**Cidade:** {end['cidade']}")
+            st.write(f"**Bairro:** {end['bairro']}")
+            st.write(f"**Estado:** {end['estado']}")
+            st.write(f"**CEP:** {end['cep']}")
 
-        st.sidebar.write("**Diretório de Downloads:**")
-        st.sidebar.write(download_directory)
+            keep = st.checkbox(f"Deseja manter este endereço? (Endereço {i})", value=True, key=f"keep_{i}")
+            if keep:
+                edit = st.checkbox(f"Deseja editar este endereço? (Endereço {i})", key=f"edit_{i}")
+                if edit:
+                    end['endereco'] = st.text_input(f"Endereço [{end['endereco']}]:", value=end['endereco'], key=f"endereco_{i}")
+                    end['cidade'] = st.text_input(f"Cidade [{end['cidade']}]:", value=end['cidade'], key=f"cidade_{i}")
+                    end['bairro'] = st.text_input(f"Bairro [{end['bairro']}]:", value=end['bairro'], key=f"bairro_{i}")
+                    end['estado'] = st.text_input(f"Estado [{end['estado']}]:", value=end['estado'], key=f"estado_{i}")
+                    end['cep'] = st.text_input(f"CEP [{end['cep']}]:", value=end['cep'], key=f"cep_{i}")
+                selected_addresses.append(end)
 
-        if st.sidebar.button("Iniciar Processo"):
-            if not username or not password or not process_number:
-                st.error("Por favor, preencha todos os campos.")
-            else:
-                with st.spinner("Processando..."):
+    return selected_addresses
+
+def get_latest_downloaded_file(download_directory):
+    try:
+        files = [os.path.join(download_directory, f) for f in os.listdir(download_directory) if os.path.isfile(os.path.join(download_directory, f))]
+        files = [f for f in files if f.lower().endswith('.pdf')]
+        latest_file = max(files, key=os.path.getmtime) if files else None
+        return latest_file
+    except Exception as e:
+        logger.error(f"Erro ao acessar o diretório de downloads: {e}")
+        return None
+
+# Interface do Streamlit
+def main():
+    st.title("Automação de Notificações SEI-Anvisa")
+
+    st.sidebar.header("Configurações")
+
+    # Inputs do Usuário
+    username = st.sidebar.text_input("Usuário")
+    password = st.sidebar.text_input("Senha", type="password")
+    process_number = st.sidebar.text_input("Número do Processo")
+    # Diretório de downloads será um diretório temporário
+    download_directory = tempfile.mkdtemp(prefix="downloads_")
+
+    st.sidebar.write("**Diretório de Downloads:**")
+    st.sidebar.write(download_directory)
+
+    if st.sidebar.button("Iniciar Processo"):
+        if not username or not password or not process_number:
+            st.error("Por favor, preencha todos os campos.")
+        else:
+            with st.spinner("Processando..."):
+                try:
+                    latest_pdf = process_notification(username, password, process_number, download_directory)
+                    st.success("PDF gerado e baixado automaticamente.")
+
+                    # Exibir o caminho do PDF (opcional)
+                    st.write(f"PDF salvo em: {latest_pdf}")
+
+                    # Extrair texto do PDF
+                    text = extract_text_with_pypdf2(latest_pdf)
+
+                    if text:
+                        st.success("Texto extraído com sucesso!")
+                        numero_processo = extract_process_number(os.path.basename(latest_pdf))
+                        info = extract_information_spacy(text)
+                        addresses = extract_addresses_spacy(text)
+
+                        # Permitir ao usuário editar os endereços
+                        addresses = escolher_enderecos(addresses)
+
+                        # Escolher o modelo do documento
+                        modelo = st.selectbox("Escolha o modelo do documento:", ["Modelo 1", "Modelo 2", "Modelo 3"])
+
+                        if st.button("Gerar Documento"):
+                            doc = Document()
+                            if modelo == "Modelo 1":
+                                _gerar_modelo_1(doc, info, addresses, numero_processo)
+                                tipo_documento = 1
+                            elif modelo == "Modelo 2":
+                                _gerar_modelo_2(doc, info, addresses, numero_processo)
+                                tipo_documento = 2
+                            elif modelo == "Modelo 3":
+                                _gerar_modelo_3(doc, info, addresses, numero_processo)
+                                tipo_documento = 3
+
+                            output_dir = tempfile.mkdtemp(prefix="output_")
+                            output_path = os.path.join(output_dir, f"Notificacao_Processo_Nº_{numero_processo}_modelo_{tipo_documento}.docx")
+                            doc.save(output_path)
+                            st.success(f"Documento gerado com sucesso.")
+
+                            # Fornecer link de download
+                            with open(output_path, "rb") as file:
+                                st.download_button(
+                                    label="Baixar Documento",
+                                    data=file,
+                                    file_name=os.path.basename(output_path),
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                )
+
+                    else:
+                        st.error("Não foi possível extrair texto do arquivo.")
+
+                except Exception as e:
+                    st.error(f"Ocorreu um erro: {e}")
+
+    st.header("Gerar Documento a Partir do PDF")
+
+    if st.button("Processar Último PDF Baixado"):
+        with st.spinner("Processando o último PDF baixado..."):
+            try:
+                latest_file = get_latest_downloaded_file(download_directory)
+
+                if latest_file:
+                    st.write(f"Último arquivo encontrado: {os.path.basename(latest_file)}")
                     try:
-                        latest_pdf = process_notification(username, password, process_number, download_directory)
-                        st.success("PDF gerado e baixado automaticamente.")
-
-                        # Exibir o caminho do PDF (opcional)
-                        st.write(f"PDF salvo em: {latest_pdf}")
-
-                        # Extrair texto do PDF
-                        text = extract_text_with_pypdf2(latest_pdf)
+                        numero_processo = extract_process_number(os.path.basename(latest_file))
+                        text = extract_text_with_pypdf2(latest_file)
 
                         if text:
-                            st.success("Texto extraído com sucesso!")
-                            numero_processo = extract_process_number(os.path.basename(latest_pdf))
+                            st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
                             info = extract_information_spacy(text)
                             addresses = extract_addresses_spacy(text)
 
@@ -551,83 +592,14 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo):
                                         file_name=os.path.basename(output_path),
                                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                     )
-
                         else:
                             st.error("Não foi possível extrair texto do arquivo.")
-
                     except Exception as e:
                         st.error(f"Ocorreu um erro: {e}")
+                else:
+                    st.warning("Nenhum arquivo encontrado no diretório de downloads.")
+            except Exception as e:
+                st.error(f"Ocorreu um erro: {e}")
 
-        st.header("Gerar Documento a Partir do PDF")
-
-        if st.button("Processar Último PDF Baixado"):
-            with st.spinner("Processando o último PDF baixado..."):
-                try:
-                    latest_file = get_latest_downloaded_file(download_directory)
-
-                    if latest_file:
-                        st.write(f"Último arquivo encontrado: {os.path.basename(latest_file)}")
-                        try:
-                            numero_processo = extract_process_number(os.path.basename(latest_file))
-                            text = extract_text_with_pypdf2(latest_file)
-
-                            if text:
-                                st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
-                                info = extract_information_spacy(text)
-                                addresses = extract_addresses_spacy(text)
-
-                                # Permitir ao usuário editar os endereços
-                                addresses = escolher_enderecos(addresses)
-
-                                # Escolher o modelo do documento
-                                modelo = st.selectbox("Escolha o modelo do documento:", ["Modelo 1", "Modelo 2", "Modelo 3"])
-
-                                if st.button("Gerar Documento"):
-                                    doc = Document()
-                                    if modelo == "Modelo 1":
-                                        _gerar_modelo_1(doc, info, addresses, numero_processo)
-                                        tipo_documento = 1
-                                    elif modelo == "Modelo 2":
-                                        _gerar_modelo_2(doc, info, addresses, numero_processo)
-                                        tipo_documento = 2
-                                    elif modelo == "Modelo 3":
-                                        _gerar_modelo_3(doc, info, addresses, numero_processo)
-                                        tipo_documento = 3
-
-                                    output_dir = tempfile.mkdtemp(prefix="output_")
-                                    output_path = os.path.join(output_dir, f"Notificacao_Processo_Nº_{numero_processo}_modelo_{tipo_documento}.docx")
-                                    doc.save(output_path)
-                                    st.success(f"Documento gerado com sucesso.")
-
-                                    # Fornecer link de download
-                                    with open(output_path, "rb") as file:
-                                        st.download_button(
-                                            label="Baixar Documento",
-                                            data=file,
-                                            file_name=os.path.basename(output_path),
-                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                        )
-                            else:
-                                st.error("Não foi possível extrair texto do arquivo.")
-                        except Exception as e:
-                            st.error(f"Ocorreu um erro: {e}")
-                    else:
-                        st.warning("Nenhum arquivo encontrado no diretório de downloads.")
-                except Exception as e:
-                    st.error(f"Ocorreu um erro: {e}")
-
-    if __name__ == '__main__':
-        main()
-    ```
-
-### **11. Reimplantando e Testando Novamente**
-
-Após realizar todas as alterações:
-
-1. **Commit e Push:**
-   - Certifique-se de que todas as alterações no código e no `packages.txt` foram commitadas e pushadas para o seu repositório GitHub.
-
-   ```bash
-   git add app.py packages.txt requirements.txt
-   git commit -m "Atualiza packages.txt e ajusta código para usar chromium e webdriver-manager"
-   git push origin main
+if __name__ == '__main__':
+    main()
