@@ -1,1 +1,3 @@
-
+chromium-chromedriver
+chromium
+fonts-liberation
