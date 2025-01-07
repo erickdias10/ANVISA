@@ -32,12 +32,12 @@ logger = logging.getLogger()
 # Função para carregar o modelo spaCy
 def load_spacy_model():
     try:
-        return spacy.load("pt_core_news_lg")
+        return spacy.load("pt_core_news_sm")
     except OSError:
         from spacy.cli import download
         with st.spinner("Baixando modelo spaCy (isso pode levar alguns minutos)..."):
             download("pt_core_news_lg")
-        return spacy.load("pt_core_news_lg")
+        return spacy.load("pt_core_news_sm")
 
 nlp = load_spacy_model()
 
