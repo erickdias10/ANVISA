@@ -1,6 +1,7 @@
 streamlit
-nest_asyncio
 selenium
 webdriver-manager
 PyPDF2
 python-docx
+spacy
+nest_asyncio
