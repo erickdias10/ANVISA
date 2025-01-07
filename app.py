@@ -31,14 +31,14 @@ logger = logging.getLogger()
 
 # Função para carregar o modelo spaCy
 def load_spacy_model():
-    try:
-        return spacy.load("pt_core_news_sm")
-    except OSError:
+    model_name = "pt_core_news_lg"
+    if not spacy.util.is_package(model_name):
         from spacy.cli import download
         with st.spinner("Baixando modelo spaCy (isso pode levar alguns minutos)..."):
-            download("pt_core_news_lg")
-        return spacy.load("pt_core_news_sm")
+            download(model_name)
+    return spacy.load(model_name)
 
+# Carregar o modelo
 nlp = load_spacy_model()
 
 # Constantes de elementos
@@ -71,8 +71,9 @@ def create_driver(download_dir=None):
     chrome_options.set_capability("unhandledPromptBehavior", "ignore")
 
     # Especificar o caminho do Chromium instalado via apt
-    chrome_options.binary_location = "/usr/bin/chromium-browser"
+    chrome_options.binary_location = "/usr/bin/chromium"
 
+    # Utilizar webdriver-manager para gerenciar o ChromeDriver
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
@@ -602,3 +603,16 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo):
 
     if __name__ == '__main__':
         main()
+    ```
+
+### **11. Reimplantando e Testando Novamente**
+
+Após realizar todas as alterações:
+
+1. **Commit e Push:**
+   - Certifique-se de que todas as alterações no código e no `packages.txt` foram commitadas e pushadas para o seu repositório GitHub.
+
+   ```bash
+   git add app.py packages.txt requirements.txt
+   git commit -m "Atualiza packages.txt e ajusta código para usar chromium e webdriver-manager"
+   git push origin main
