@@ -31,7 +31,7 @@ logger = logging.getLogger()
 
 # Função para carregar o modelo spaCy
 def load_spacy_model():
-    model_name = "pt_core_news_lg"
+    model_name = "pt_core_news_sm"
     if not spacy.util.is_package(model_name):
         from spacy.cli import download
         with st.spinner("Baixando modelo spaCy (isso pode levar alguns minutos)..."):
