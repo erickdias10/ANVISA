@@ -9,8 +9,15 @@ import re
 import spacy
 import shutil
 
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError, Dialog
-
+from selenium.common.exceptions import TimeoutException
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.alert import Alert
+from webdriver_manager.chrome import ChromeDriverManager
 from PyPDF2 import PdfReader
 from docx import Document
 from docx.shared import Pt
@@ -42,130 +49,107 @@ BUTTON_XPATH_ALT = '//img[@title="Gerar Arquivo PDF do Processo"]/parent::a'
 # Funções existentes
 def create_driver(download_dir=None):
     if download_dir is None:
-        download_dir = tempfile.mkdtemp(prefix="downloads_")
+        # Usar um diretório temporário
+        download_dir = tempfile.mkdtemp()
     
-    playwright = sync_playwright().start()
-    browser = playwright.chromium.launch(headless=True)
-    context = browser.new_context(
-        accept_downloads=True,
-        downloads_path=download_dir,
-        viewport={"width": 1920, "height": 1080},
-    )
-    page = context.new_page()
-    return {'playwright': playwright, 'browser': browser, 'context': context, 'page': page, 'download_dir': download_dir}
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Executa o Chrome em modo headless
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")  # Necessário em alguns ambientes de nuvem
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-popup-blocking")
+    chrome_options.add_argument("--disable-notifications")
+    
+    prefs = {
+        "download.default_directory": download_dir,
+        "download.prompt_for_download": False,
+        "plugins.always_open_pdf_externally": True,
+    }
+    chrome_options.add_experimental_option("prefs", prefs)
 
-def wait_for_element(driver, by, value, timeout=20000):
-    page = driver['page']
+    chrome_options.set_capability("unhandledPromptBehavior", "ignore")
+
+    # Especificar o caminho do Chromium instalado via apt
+    chrome_options.binary_location = "/usr/bin/chromium"
+
+    # Utilizar webdriver-manager para gerenciar o ChromeDriver
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    return driver
+
+def wait_for_element(driver, by, value, timeout=20):
     try:
         logger.info(f"Aguardando elemento: {value}")
-        # Converter o 'by' do Selenium para seletores do Playwright
-        if by == By.ID:
-            selector = f"#{value}"
-        elif by == By.XPATH:
-            selector = f"xpath={value}"
-        elif by == By.CSS_SELECTOR:
-            selector = value
-        else:
-            raise Exception(f"Tipo de seleção '{by}' não suportado.")
-        element = page.wait_for_selector(selector, timeout=timeout)
+        element = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((by, value))
+        )
         return element
-    except PlaywrightTimeoutError as e:
+    except Exception as e:
         logger.error(f"Erro ao localizar o elemento: {value}")
         raise Exception(f"Elemento {value} não encontrado na página.") from e
 
 def handle_alert(driver):
-    page = driver['page']
     try:
-        logger.info("Aguardando alerta.")
-        dialog = page.wait_for_event("dialog", timeout=5000)
-        alert_text = dialog.message
+        WebDriverWait(driver, 5).until(EC.alert_is_present())
+        alert = Alert(driver)
+        alert_text = alert.text
         logger.warning(f"Alerta inesperado encontrado: {alert_text}")
-        dialog.accept()
+        alert.accept()
         return alert_text
-    except PlaywrightTimeoutError:
+    except Exception:
         logger.info("Nenhum alerta encontrado.")
-        return None
-    except Exception as e:
-        logger.error(f"Erro ao lidar com alerta: {e}")
         return None
 
 def login(driver, username, password):
-    page = driver['page']
     logger.info("Acessando a página de login.")
-    page.goto(LOGIN_URL)
-    user_field = wait_for_element(driver, By.ID, "txtUsuario")
-    user_field.fill(username)
-    password_field = page.query_selector("#pwdSenha")
-    if password_field:
-        password_field.fill(password)
-    else:
-        logger.error("Campo de senha não encontrado.")
-        raise Exception("Campo de senha não encontrado.")
-    submit_button = page.query_selector("#sbmAcessar")
-    if submit_button:
-        submit_button.click()
-    else:
-        logger.error("Botão de acesso não encontrado.")
-        raise Exception("Botão de acesso não encontrado.")
+    driver.get(LOGIN_URL)
+    wait_for_element(driver, By.ID, "txtUsuario").send_keys(username)
+    driver.find_element(By.ID, "pwdSenha").send_keys(password)
+    driver.find_element(By.ID, "sbmAcessar").click()
 
 def access_process(driver, process_number):
-    page = driver['page']
     search_field = wait_for_element(driver, By.ID, "txtPesquisaRapida")
-    search_field.fill(process_number)
-    search_field.press("Enter")
+    search_field.send_keys(process_number)
+    search_field.send_keys("\n")
     logger.info("Processo acessado com sucesso.")
-    page.wait_for_timeout(3000)
+    time.sleep(3)
 
 def generate_pdf(driver):
-    page = driver['page']
     try:
-        logger.info("Acessando iframe para gerar PDF.")
-        frame = page.frame(name=IFRAME_VISUALIZACAO_ID)
-        if not frame:
-            raise Exception(f"Iframe {IFRAME_VISUALIZACAO_ID} não encontrado.")
-        gerar_pdf_button = frame.wait_for_selector(BUTTON_XPATH_ALT, timeout=10000, state="visible")
-        if gerar_pdf_button:
-            gerar_pdf_button.click()
-            logger.info("Clique no botão 'Gerar Arquivo PDF do Processo' realizado.")
-        else:
-            raise Exception("Botão 'Gerar Arquivo PDF do Processo' não encontrado.")
-        handle_alert(driver)
+        driver.switch_to.frame(
+            wait_for_element(driver, By.ID, IFRAME_VISUALIZACAO_ID)
+        )
+        gerar_pdf_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, BUTTON_XPATH_ALT))
+        )
+        driver.execute_script("arguments[0].click();", gerar_pdf_button)
+        logger.info("Clique no botão 'Gerar Arquivo PDF do Processo' realizado.")
         return "PDF gerado com sucesso."
     except Exception as e:
         logger.error(f"Erro ao gerar o PDF: {e}")
         raise Exception("Erro ao gerar o PDF do processo.")
     finally:
-        page.wait_for_timeout(5000)
+        driver.switch_to.default_content()
+        time.sleep(5)
 
 def download_pdf(driver, option="Todos os documentos disponíveis"):
-    page = driver['page']
     try:
-        logger.info("Acessando iframe para selecionar opção de download.")
-        frame = page.frame(name=IFRAME_VISUALIZACAO_ID)
-        if not frame:
-            raise Exception(f"Iframe {IFRAME_VISUALIZACAO_ID} não encontrado.")
-
-        # Buscar todas as opções de download
-        dropdown_buttons = frame.query_selector_all('//div[@class="menu-opcao"]//button')
+        # Acessar o iframe 'ifrVisualizacao' e selecionar a opção de download
+        dropdown_options = WebDriverWait(driver, 10).until(
+            EC.presence_of_all_elements_located((By.XPATH, '//div[@class="menu-opcao"]//button'))
+        )
         logger.info("Opções de download detectadas.")
 
-        clicked = False
-        for button in dropdown_buttons:
-            button_text = button.inner_text().strip()
-            if button_text == option:
-                with frame.expect_download() as download_info:
-                    button.click()
-                download = download_info.value
-                download_path = os.path.join(driver['download_dir'], download.suggested_filename)
-                download.save_as(download_path)
-                logger.info(f"Opção '{option}' selecionada com sucesso e download iniciado.")
-                clicked = True
+        for option_button in dropdown_options:
+            if option_button.text.strip() == option:
+                driver.execute_script("arguments[0].click();", option_button)
+                logger.info(f"Opção '{option}' selecionada com sucesso.")
                 break
-        if not clicked:
+        else:
             logger.warning(f"Opção '{option}' não encontrada. Prosseguindo sem selecionar opção.")
 
-        # Aguardar alguns segundos para garantir o download
-        page.wait_for_timeout(5000)
+        time.sleep(5)
         logger.info("Download iniciado (ou já realizado com sucesso).")
 
     except Exception as e:
@@ -174,7 +158,6 @@ def download_pdf(driver, option="Todos os documentos disponíveis"):
 
 def process_notification(username: str, password: str, process_number: str, download_dir):
     driver = create_driver(download_dir)
-    page = driver['page']
     try:
         login(driver, username, password)
         access_process(driver, process_number)
@@ -185,7 +168,7 @@ def process_notification(username: str, password: str, process_number: str, down
             logger.warning(f"Erro não crítico no download_pdf: {e}")
 
         logger.info("Aguardando alguns segundos para permitir o download do PDF...")
-        page.wait_for_timeout(10000)
+        time.sleep(10)
 
         # Encontrar o arquivo PDF baixado
         files = [f for f in os.listdir(download_dir) if f.lower().endswith('.pdf')]
@@ -198,8 +181,7 @@ def process_notification(username: str, password: str, process_number: str, down
         logger.exception("Erro durante o processamento.")
         raise e
     finally:
-        driver['browser'].close()
-        driver['playwright'].stop()
+        driver.quit()
 
 # Funções Auxiliares
 def normalize_text(text):
@@ -421,6 +403,7 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo):
         doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "Este é o modelo 2 do documento.")
         doc.add_paragraph("\n")
+
     except Exception as e:
         logger.error(f"Erro ao gerar o documento no modelo 2: {e}")
 
@@ -444,6 +427,7 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo):
         doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "Este é o modelo 3 do documento.")
         doc.add_paragraph("\n")
+
     except Exception as e:
         logger.error(f"Erro ao gerar o documento no modelo 3: {e}")
 
@@ -462,7 +446,7 @@ def escolher_enderecos(enderecos):
             st.write(f"**Bairro:** {end['bairro']}")
             st.write(f"**Estado:** {end['estado']}")
             st.write(f"**CEP:** {end['cep']}")
-    
+
             keep = st.checkbox(f"Deseja manter este endereço? (Endereço {i})", value=True, key=f"keep_{i}")
             if keep:
                 edit = st.checkbox(f"Deseja editar este endereço? (Endereço {i})", key=f"edit_{i}")
