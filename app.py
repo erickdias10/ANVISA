@@ -6,7 +6,7 @@ import os
 import unicodedata
 import re
 import spacy
-
+import difflib
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from PyPDF2 import PdfReader
 from docx import Document
@@ -16,6 +16,7 @@ from io import BytesIO
 # Adicionando novas importações para OCR
 from pdf2image import convert_from_path
 import pytesseract
+from PIL import Image, ImageEnhance, ImageFilter
 
 # Configuração de logs
 logging.basicConfig(level=logging.INFO)
@@ -293,6 +294,75 @@ def corrigir_texto(texto):
         texto = texto.replace(errado, correto)
     return texto
 
+def extract_information_spacy(text):
+    """
+    Extrai informações do texto utilizando spaCy.
+    """
+    doc = nlp(text)
+
+    info = {
+        "nome_autuado": None,
+        "cpf": None,
+        "cnpj": None,
+        "socios_advogados": [],
+        "emails": [],
+    }
+
+    for ent in doc.ents:
+        if ent.label_ in ["PER", "ORG"]:  # Pessoa ou Organização
+            if not info["nome_autuado"]:
+                info["nome_autuado"] = ent.text.strip()
+        elif ent.label_ == "EMAIL":
+            info["emails"].append(ent.text.strip())
+
+    # Usar regex para complementar a extração de CNPJ e CPF
+    cnpj_pattern = r"CNPJ:\s*([\d./-]{18})"
+    cpf_pattern = r"CPF:\s*([\d./-]{14})"
+
+    cnpj_match = re.search(cnpj_pattern, text)
+    cpf_match = re.search(cpf_pattern, text)
+
+    if cnpj_match:
+        cnpj = cnpj_match.group(1)
+        info["cnpj"] = format_cnpj(cnpj)
+    if cpf_match:
+        cpf = cpf_match.group(1)
+        info["cpf"] = format_cpf(cpf)
+
+    # Sócios ou Advogados mencionados
+    socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
+    info["socios_advogados"] = re.findall(socios_adv_pattern, text) or []
+
+    return info
+
+def format_cnpj(cnpj):
+    """
+    Formata o CNPJ no padrão XX.XXX.XXX/XXXX-XX
+    """
+    digits = re.sub(r'\D', '', cnpj)
+    if len(digits) != 14:
+        return cnpj  # Retorna como está se não tiver 14 dígitos
+    return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}"
+
+def format_cpf(cpf):
+    """
+    Formata o CPF no padrão XXX.XXX.XXX-XX
+    """
+    digits = re.sub(r'\D', '', cpf)
+    if len(digits) != 11:
+        return cpf  # Retorna como está se não tiver 11 dígitos
+    return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:11]}"
+
+def extract_process_number(file_name):
+    base_name = os.path.splitext(file_name)[0]
+    if base_name.startswith("SEI"):
+        base_name = base_name[3:].strip()
+    # Formatar no padrão XXXXX.XXXXXX/XXXX-XX
+    digits = re.sub(r'\D', '', base_name)
+    if len(digits) != 15:
+        return base_name  # Retorna como está se não tiver 15 dígitos
+    return f"{digits[:5]}.{digits[5:11]}/{digits[11:15]}-{digits[15-1:]}"
+
 def extract_text_with_pypdf2(pdf_path):
     """
     Extrai texto de um PDF usando PyPDF2. Se não encontrar texto, tenta usar OCR.
@@ -331,7 +401,10 @@ def extract_text_with_ocr(pdf_path):
             logging.info(f"Processando página {page_number} com OCR.")
             # Pré-processamento da imagem para melhorar a precisão do OCR
             gray = page.convert('L')  # Converter para escala de cinza
+            enhancer = ImageEnhance.Contrast(gray)
+            gray = enhancer.enhance(2.0)
             threshold = gray.point(lambda x: 0 if x < 128 else 255, '1')  # Aplicar threshold binário
+            threshold = threshold.filter(ImageFilter.MedianFilter())
 
             custom_config = r'--oem 3 --psm 6'  # OEM 3: LSTM + Legacy, PSM 6: Assume uma única unidade de texto uniforme
             page_text = pytesseract.image_to_string(threshold, lang='por', config=custom_config)
@@ -348,43 +421,11 @@ def extract_text_with_ocr(pdf_path):
         st.error(f"Erro durante o OCR do PDF {pdf_path}: {e}")
         return ''
 
-def extract_information_spacy(text):
-    """
-    Extrai informações do texto utilizando spaCy.
-    """
-    doc = nlp(text)
-
-    info = {
-        "nome_autuado": None,
-        "cnpj_cpf": None,
-        "socios_advogados": [],
-        "emails": [],
-    }
-
-    for ent in doc.ents:
-        if ent.label_ in ["PER", "ORG"]:  # Pessoa ou Organização
-            if not info["nome_autuado"]:
-                info["nome_autuado"] = ent.text.strip()
-        elif ent.label_ == "EMAIL":
-            info["emails"].append(ent.text.strip())
-
-    # Usar regex para complementar a extração de CNPJ/CPF
-    cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
-    match = re.search(cnpj_cpf_pattern, text)
-    if match:
-        info["cnpj_cpf"] = match.group(1)
-
-    # Sócios ou Advogados mencionados
-    socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
-    info["socios_advogados"] = re.findall(socios_adv_pattern, text) or []
-
-    return info
-
 def extract_addresses_spacy(text):
     """
     Extrai endereços do texto utilizando spaCy e complementa com regex, garantindo a unicidade e completude.
     - Exclui endereços com Endereço: ou CEP: vazios ou nulos.
-    - Seleciona o endereço com mais caracteres para cada grupo baseado nos primeiros 15 caracteres.
+    - Seleciona o endereço com mais caracteres para cada grupo baseado na normalização.
     - Preenche os outros campos (cidade, bairro, estado) da melhor forma possível.
     """
     doc = nlp(text)
@@ -416,27 +457,27 @@ def extract_addresses_spacy(text):
 
         # Verificar se 'Endereço' e 'CEP' não estão vazios ou com placeholders
         if (endereco and endereco != "[Não informado]") and (cep and cep != "[Não informado]"):
-            # Cria uma chave baseada nos primeiros 15 caracteres do 'endereco'
-            key = endereco[:15].lower()
+            # Normalizar o endereço para deduplicação
+            normalized_endereco = normalize_address(endereco)
 
             # Só se adiciona se o endereço for mais completo
-            if key in seen_addresses:
-                existing = seen_addresses[key]
+            if normalized_endereco in seen_addresses:
+                existing = seen_addresses[normalized_endereco]
                 # Seleciona o endereço com mais caracteres
                 if len(endereco) > len(existing["endereco"]):
-                    seen_addresses[key]["endereco"] = endereco
+                    seen_addresses[normalized_endereco]["endereco"] = endereco
 
                 # Preenche os campos restantes se estiverem faltando
                 if existing["cidade"] == "[Não informado]" and cidade != "[Não informado]":
-                    seen_addresses[key]["cidade"] = cidade
+                    seen_addresses[normalized_endereco]["cidade"] = cidade
                 if existing["bairro"] == "[Não informado]" and bairro != "[Não informado]":
-                    seen_addresses[key]["bairro"] = bairro
+                    seen_addresses[normalized_endereco]["bairro"] = bairro
                 if existing["estado"] == "[Não informado]" and estado != "[Não informado]":
-                    seen_addresses[key]["estado"] = estado
+                    seen_addresses[normalized_endereco]["estado"] = estado
                 if existing["cep"] == "[Não informado]" and cep != "[Não informado]":
-                    seen_addresses[key]["cep"] = cep
+                    seen_addresses[normalized_endereco]["cep"] = cep
             else:
-                seen_addresses[key] = {
+                seen_addresses[normalized_endereco] = {
                     "endereco": endereco,
                     "cidade": cidade,
                     "bairro": bairro,
@@ -456,6 +497,15 @@ def extract_addresses_spacy(text):
 
     return addresses
 
+def normalize_address(address):
+    """
+    Normaliza o endereço removendo pontuação, convertendo para minúsculas e removendo espaços extras.
+    """
+    address = unicodedata.normalize('NFKD', address).encode('ASCII', 'ignore').decode('utf-8')
+    address = re.sub(r'[^\w\s]', '', address)  # Remove pontuação
+    address = re.sub(r'\s+', ' ', address)  # Remove múltiplos espaços
+    return address.lower().strip()
+
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
@@ -463,18 +513,21 @@ def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     run.font.size = Pt(tamanho)
     return paragrafo
 
-def extract_process_number(file_name):
-    base_name = os.path.splitext(file_name)[0]
-    if base_name.startswith("SEI"):
-        base_name = base_name[3:].strip()
-    return base_name
-
-def _gerar_modelo_1(doc, info, enderecos, numero_processo):
+def _gerar_modelo_1(doc, info, enderecos, numero_processo, email_selecionado):
     try:
         # Adiciona o cabeçalho do documento
         doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+        nome_autuado = info.get('nome_autuado', '[Nome não informado]')
+        cnpj = info.get('cnpj', '')
+        cpf = info.get('cpf', '')
+        if cnpj:
+            identificador = f"CNPJ: {cnpj}"
+        elif cpf:
+            identificador = f"CPF: {cpf}"
+        else:
+            identificador = "CNPJ/CPF: [Não informado]"
+        adicionar_paragrafo(doc, f"{nome_autuado} – {identificador}")
         doc.add_paragraph("\n")
 
         for idx, endereco in enumerate(enderecos, start=1):
@@ -556,17 +609,26 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo):
         adicionar_paragrafo(doc, 
             "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo."
         )
-        doc.add_paragraph("\n")
-
+        adicionar_paragrafo(doc, f"\nInformações de contato: {email_selecionado}")
+    
     except Exception as e:
         st.error(f"Erro ao gerar o documento no modelo 1: {e}")
 
-def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_decisao, data_recebimento_notificacao, data_extincao=None):
+def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_decisao, data_recebimento_notificacao, data_extincao=None, email_selecionado=None):
     try:
         # Adiciona o cabeçalho do documento
         doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+        nome_autuado = info.get('nome_autuado', '[Nome não informado]')
+        cnpj = info.get('cnpj', '')
+        cpf = info.get('cpf', '')
+        if cnpj:
+            identificador = f"CNPJ: {cnpj}"
+        elif cpf:
+            identificador = f"CPF: {cpf}"
+        else:
+            identificador = "CNPJ/CPF: [Não informado]"
+        adicionar_paragrafo(doc, f"{nome_autuado} – {identificador}")
         doc.add_paragraph("\n")
 
         for idx, endereco in enumerate(enderecos, start=1):
@@ -592,7 +654,7 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_
         
         # Texto Adaptado
         adicionar_paragrafo(doc, 
-            f"Informamos que a Decisão em 1ª instância proferida pela Gerência-Geral de Portos, Aeroportos, Fronteiras e Recintos Alfandegados ou Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias, em {data_decisao}, no processo administrativo sancionador em referência, foi revisada ou retratada no âmbito da Anvisa pelos motivos expostos abaixo."
+            f"Informamos que a Decisão em 1ª instância proferida pela Gerência-Geral de Portos, Aeroportos, Fronteiras e Recintos Alfandegados ou Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias, em {data_decisao.strftime('%d/%m/%Y')}, no processo administrativo sancionador em referência, foi revisada ou retratada no âmbito da Anvisa pelos motivos expostos abaixo."
         )
         doc.add_paragraph("\n")
         
@@ -602,13 +664,13 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_
             )
         elif motivo_revisao == "prescricao":
             adicionar_paragrafo(doc, 
-                f"Foi observado que da decisão condenatória recorrível proferida em {data_decisao} até o ato seguinte capaz de interromper a prescrição (ex: notificação da decisão em {data_recebimento_notificacao}) passaram-se mais de cinco anos sem que houvesse entre eles outro ato capaz de interromper o curso prescricional (documento que declarou a prescrição. Ex: NOTA n. 00014/2020/EI-M-ANVIS/ENAC/PGF/AGU)."
+                f"Foi observado que da decisão condenatória recorrível proferida em {data_decisao.strftime('%d/%m/%Y')} até o ato seguinte capaz de interromper a prescrição (ex: notificação da decisão em {data_recebimento_notificacao.strftime('%d/%m/%Y')}) passaram-se mais de cinco anos sem que houvesse entre eles outro ato capaz de interromper o curso prescricional (documento que declarou a prescrição. Ex: NOTA n. 00014/2020/EI-M-ANVIS/ENAC/PGF/AGU)."
             )
         elif motivo_revisao == "extincao_empresa":
             if not data_extincao:
                 raise ValueError("A data de extinção da empresa deve ser fornecida para o motivo 'extincao_empresa'.")
             adicionar_paragrafo(doc, 
-                f"Foi constatado, ao longo dos procedimentos de cobrança administrativa, que a empresa em questão havia sido 'EXTINTA' na data de {data_extincao}, conforme Certidão Simplificada e documento de Distrato Social fornecido pelo órgão de registro comercial - [Nome do Órgão]."
+                f"Foi constatado, ao longo dos procedimentos de cobrança administrativa, que a empresa em questão havia sido 'EXTINTA' na data de {data_extincao.strftime('%d/%m/%Y')}, conforme Certidão Simplificada e documento de Distrato Social fornecido pelo órgão de registro comercial - [Nome do Órgão]."
             )
         else:
             # Para outros motivos, você pode adaptar conforme necessário
@@ -650,19 +712,28 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_
         adicionar_paragrafo(doc, 
             "Terceiros não interessados diretamente no processo estão dispensados de apresentar documentação e terão acesso somente às cópias dos seguintes documentos: Auto de Infração, Manifestação da área autuante e Decisão."
         )
-        doc.add_paragraph("\n")
-        
+        adicionar_paragrafo(doc, f"\nInformações de contato: {email_selecionado}")
+
     except Exception as e:
         st.error(f"Erro ao gerar o documento no modelo 2: {e}")
 
-def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario_email, orgao_registro_comercial):
+def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario_email, orgao_registro_comercial, email_selecionado):
     try:
         # Adiciona uma quebra de linha no início
         doc.add_paragraph("\n")
         
         # Adiciona o cabeçalho do documento
         adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
-        adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
+        nome_autuado = info.get('nome_autuado', '[Nome não informado]')
+        cnpj = info.get('cnpj', '')
+        cpf = info.get('cpf', '')
+        if cnpj:
+            identificador = f"CNPJ: {cnpj}"
+        elif cpf:
+            identificador = f"CPF: {cpf}"
+        else:
+            identificador = "CNPJ/CPF: [Não informado]"
+        adicionar_paragrafo(doc, f"{nome_autuado} – {identificador}")
         doc.add_paragraph("\n")
 
         # Adiciona os endereços
@@ -726,6 +797,9 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario
         )
         adicionar_paragrafo(doc, "\n")
         
+        # Informações de contato
+        adicionar_paragrafo(doc, f"\nInformações de contato: {email_selecionado}")
+        
         # Encerramento
         adicionar_paragrafo(doc, "Atenciosamente,")
         adicionar_paragrafo(doc, "\n")
@@ -733,6 +807,12 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario
         
     except Exception as e:
         st.error(f"Erro ao gerar o documento no modelo 3: {e}")
+
+def extract_all_emails(emails):
+    """
+    Remove duplicatas e retorna uma lista de emails únicos.
+    """
+    return list(set(emails))
 
 def main():
     st.title("Gerador de Notificações SEI-Anvisa")
@@ -742,18 +822,18 @@ def main():
     password = st.sidebar.text_input("Senha", type="password")
 
     st.header("Processo Administrativo")
-    process_number = st.text_input("Número do Processo")
+    process_number_input = st.text_input("Número do Processo")
 
     # Botão para gerar notificação
     gerar_notificacao = st.button("Gerar Notificação")
 
     if gerar_notificacao:
-        if not username or not password or not process_number:
+        if not username or not password or not process_number_input:
             st.error("Por favor, preencha todos os campos.")
         else:
             with st.spinner("Processando..."):
                 try:
-                    download_path = process_notification(username, password, process_number)
+                    download_path = process_notification(username, password, process_number_input)
                     st.success("PDF gerado com sucesso!")
 
                     if download_path:
@@ -761,7 +841,7 @@ def main():
                         pdf_file_name = os.path.basename(download_path)
                         st.info(f"Arquivo PDF baixado: {pdf_file_name}")
 
-                        # Extrair o número do processo
+                        # Extrair o número do processo e formatar
                         numero_processo = extract_process_number(pdf_file_name)
 
                         # Extrair texto do PDF
@@ -771,13 +851,17 @@ def main():
                             st.success("Texto extraído com sucesso!")
                             info = extract_information_spacy(text)
                             addresses = extract_addresses_spacy(text)
+                            emails = extract_all_emails(info.get('emails', []))
 
                             # Exibir informações extraídas
                             st.subheader("Informações Extraídas")
                             st.write(f"**Arquivo PDF:** {pdf_file_name}")  # Informar de qual arquivo a informação foi extraída
                             st.write(f"**Nome Autuado:** {info.get('nome_autuado', 'Não informado')}")
-                            st.write(f"**CNPJ/CPF:** {info.get('cnpj_cpf', 'Não informado')}")
-                            st.write(f"**Emails:** {', '.join(info.get('emails', []))}")
+                            if info.get('cnpj'):
+                                st.write(f"**CNPJ:** {info.get('cnpj')}")
+                            elif info.get('cpf'):
+                                st.write(f"**CPF:** {info.get('cpf')}")
+                            st.write(f"**Emails:** {', '.join(emails) if emails else 'Não informado'}")
                             st.write(f"**Sócios/Advogados:** {', '.join(info.get('socios_advogados', []))}")
 
                             st.subheader("Endereços Encontrados")
@@ -807,11 +891,19 @@ def main():
                                     "cep": cep
                                 })
 
+                            # Permitir ao usuário selecionar qual email utilizar
+                            st.subheader("Selecionar Email para Utilizar no Processo")
+                            if emails:
+                                email_selecionado = st.selectbox("Selecione o email desejado:", emails)
+                            else:
+                                email_selecionado = "[Não informado]"
+
                             # Armazenar informações no session_state para uso posterior
                             st.session_state['info'] = info
                             st.session_state['enderecos'] = edited_addresses
                             st.session_state['numero_processo'] = numero_processo
                             st.session_state['pdf_file'] = pdf_file_name
+                            st.session_state['email_selecionado'] = email_selecionado
 
                 except Exception as ex:
                     st.error(f"Ocorreu um erro: {ex}")
@@ -823,7 +915,11 @@ def main():
         'pdf_file' in st.session_state):
         
         st.subheader("Escolha o Modelo do Documento")
-        modelo = st.selectbox("Selecione o modelo desejado:", ["ID 3791 - Notificação de decisões em 1ª instância - SEI", "ID 2782 - Notificação de decisões revisadas/retratadas", "ID 2703 - Notificação de decisão da DICOL"])
+        modelo = st.selectbox("Selecione o modelo desejado:", [
+            "ID 3791 - Notificação de decisões em 1ª instância - SEI", 
+            "ID 2782 - Notificação de decisões revisadas/retratadas", 
+            "ID 2703 - Notificação de decisão da DICOL"
+        ])
 
         gerar_doc = st.button("Gerar Documento Word")
 
@@ -834,10 +930,11 @@ def main():
                 edited_addresses = st.session_state['enderecos']
                 numero_processo = st.session_state['numero_processo']
                 pdf_file_name = st.session_state['pdf_file']  # Obter o nome do arquivo PDF
+                email_selecionado = st.session_state['email_selecionado']
 
                 # Solicitar informações adicionais conforme o modelo selecionado
                 if modelo == "ID 3791 - Notificação de decisões em 1ª instância - SEI":
-                    _gerar_modelo_1(doc, info, edited_addresses, numero_processo)
+                    _gerar_modelo_1(doc, info, edited_addresses, numero_processo, email_selecionado)
                 elif modelo == "ID 2782 - Notificação de decisões revisadas/retratadas":
                     # Solicitar informações adicionais necessárias para o modelo 2
                     motivo_revisao = st.selectbox("Motivo da Revisão:", ["insuficiencia_provas", "prescricao", "extincao_empresa", "outros"])
@@ -848,13 +945,32 @@ def main():
                     if motivo_revisao == "extincao_empresa":
                         data_extincao = st.date_input("Data de Extinção da Empresa:")
 
-                    _gerar_modelo_2(doc, info, edited_addresses, numero_processo, motivo_revisao, data_decisao, data_recebimento_notificacao, data_extincao)
+                    _gerar_modelo_2(
+                        doc, 
+                        info, 
+                        edited_addresses, 
+                        numero_processo, 
+                        motivo_revisao, 
+                        data_decisao, 
+                        data_recebimento_notificacao, 
+                        data_extincao,
+                        email_selecionado
+                    )
                 elif modelo == "ID 2703 - Notificação de decisão da DICOL":
                     # Solicitar informações adicionais necessárias para o modelo 3
                     usuario_nome = st.text_input("Nome do Usuário:")
                     usuario_email = st.text_input("Email do Usuário:")
                     orgao_registro_comercial = st.text_input("Órgão de Registro Comercial:")
-                    _gerar_modelo_3(doc, info, edited_addresses, numero_processo, usuario_nome, usuario_email, orgao_registro_comercial)
+                    _gerar_modelo_3(
+                        doc, 
+                        info, 
+                        edited_addresses, 
+                        numero_processo, 
+                        usuario_nome, 
+                        usuario_email, 
+                        orgao_registro_comercial,
+                        email_selecionado
+                    )
 
                 # Adicionar uma nota sobre a origem das informações no documento
                 adicionar_paragrafo(doc, f"\nInformações extraídas do arquivo PDF: {pdf_file_name}", negrito=False, tamanho=10)
@@ -865,7 +981,8 @@ def main():
                 buffer.seek(0)
 
                 # Nome do arquivo
-                output_filename = f"Notificacao_Processo_Nº_{numero_processo}_modelo_{modelo.split()[-1]}.docx"
+                modelo_id = re.findall(r'ID\s(\d+)', modelo)[0] if re.findall(r'ID\s(\d+)', modelo) else "unknown"
+                output_filename = f"Notificacao_Processo_Nº_{numero_processo}_modelo_{modelo_id}.docx"
 
                 st.download_button(
                     label="Baixar Documento",
