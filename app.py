@@ -13,23 +13,23 @@ from docx import Document
 from docx.shared import Pt
 from io import BytesIO
 
-# Adicionando novas importações para OCR
+# Importações adicionais para OCR
 from pdf2image import convert_from_path
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 
-# Configuração de logs
-logging.basicConfig(level=logging.INFO)
+# Configuração básica de logs para capturar erros e avisos
+logging.basicConfig(level=logging.ERROR)
 
 # Configurar o caminho do Tesseract (ajuste conforme necessário)
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Para Windows
 # pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'  # Para Linux
 
-# Configurar a política de loop de eventos para Windows
+# Configurar a política de loop de eventos para Windows, se aplicável
 if os.name == 'nt':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-# Constantes de elementos
+# Constante para a URL de login do sistema SEI-Anvisa
 LOGIN_URL = "https://sei.anvisa.gov.br/sip/login.php?sigla_orgao_sistema=ANVISA&sigla_sistema=SEI"
 
 def create_browser_context():
@@ -47,7 +47,7 @@ def create_browser_context():
     playwright = sync_playwright().start()
     context = playwright.chromium.launch_persistent_context(
         user_data_dir=user_data_dir,
-        headless=False,  # Alterado para False para depuração
+        headless=False,  # Executa o navegador de forma visível
         accept_downloads=True,  # Permite downloads automáticos
         downloads_path=download_dir  # Define o diretório de downloads
     )
@@ -59,13 +59,11 @@ def wait_for_element(page, selector, timeout=20000):
     Aguarda até que um elemento esteja presente no DOM.
     """
     try:
-        logging.info(f"Aguardando elemento: {selector}")
         element = page.wait_for_selector(selector, timeout=timeout)
         if element:
-            logging.info(f"Elemento {selector} encontrado.")
             return element
     except PlaywrightTimeoutError:
-        logging.error(f"Erro ao localizar o elemento: {selector}")
+        logging.error(f"Elemento {selector} não encontrado na página.")
         raise Exception(f"Elemento {selector} não encontrado na página.")
     return None
 
@@ -91,81 +89,57 @@ def handle_alert(page):
             dialog.accept()
             return alert_text
     except PlaywrightTimeoutError:
-        logging.info("Nenhum alerta encontrado.")
+        # Nenhum alerta encontrado dentro do tempo limite
         return None
 
 def login(page, username, password):
     """
-    Realiza o login no sistema SEI.
+    Realiza o login no sistema SEI-Anvisa.
     """
     logging.info("Acessando a página de login.")
     page.goto(LOGIN_URL)
 
-    # Aguarda o campo de usuário aparecer e preenche
+    # Preenche o campo de usuário
     user_field = wait_for_element(page, "#txtUsuario")
     if user_field:
         user_field.fill(username)
-        logging.info("Campo de usuário preenchido.")
     else:
         raise Exception("Campo de usuário não encontrado.")
 
-    # Aguarda o campo de senha aparecer e preenche
+    # Preenche o campo de senha
     password_field = wait_for_element(page, "#pwdSenha")
     if password_field:
         password_field.fill(password)
-        logging.info("Campo de senha preenchido.")
     else:
         raise Exception("Campo de senha não encontrado.")
 
-    # Aguarda o botão de login aparecer e clica
+    # Clica no botão de login
     login_button = wait_for_element(page, "#sbmAcessar")
     if login_button:
         login_button.click()
-        logging.info("Botão de login clicado.")
     else:
         raise Exception("Botão de login não encontrado.")
 
     # Aguarda a página principal carregar após login
     try:
-        page.wait_for_load_state("networkidle", timeout=20000)  # Aumentei o timeout
-        logging.info("Login realizado com sucesso.")
-
-        # Captura uma screenshot após o login para depuração
-        screenshot_path = os.path.join(os.getcwd(), "login_success.png")
-        page.screenshot(path=screenshot_path)
-        logging.info(f"Screenshot após login salva em: {screenshot_path}")
+        page.wait_for_load_state("networkidle", timeout=20000)  # Aguarda até que a rede esteja ociosa
     except PlaywrightTimeoutError:
-        # Captura uma screenshot em caso de falha no login
-        screenshot_path = os.path.join(os.getcwd(), "login_failure.png")
-        page.screenshot(path=screenshot_path)
-        logging.error("Tempo esgotado aguardando a página principal carregar após login.")
-        raise Exception("Login pode não ter sido realizado com sucesso. Verifique a screenshot para mais detalhes.")
+        raise Exception("Login pode não ter sido realizado com sucesso.")
 
 def access_process(page, process_number):
     """
-    Acessa um processo pelo número no sistema SEI.
+    Acessa um processo pelo número no sistema SEI-Anvisa.
     """
     try:
-        search_field = wait_for_element(page, "#txtPesquisaRapida", timeout=40000)  # Aumentado para 40 segundos
+        # Preenche o número do processo na pesquisa rápida
+        search_field = wait_for_element(page, "#txtPesquisaRapida", timeout=40000)
         search_field.fill(process_number)
-        logging.info(f"Preenchido o número do processo: {process_number}")
         search_field.press("Enter")
-        logging.info("Processo acessado com sucesso.")
-        time.sleep(5)  # Aumentado para 5 segundos
-
-        # Captura uma screenshot após acessar o processo
-        screenshot_path = os.path.join(os.getcwd(), "access_process_success.png")
-        page.screenshot(path=screenshot_path)
-        logging.info(f"Screenshot após acessar o processo salva em: {screenshot_path}")
-
+        time.sleep(5)  # Aguarda a pesquisa concluir
     except Exception as e:
-        # Captura uma screenshot para depuração
-        screenshot_path = os.path.join(os.getcwd(), "access_process_failure.png")
-        page.screenshot(path=screenshot_path)
-        logging.error(f"Erro ao acessar o processo: {e}")
-        raise Exception(f"Erro ao acessar o processo: {e}. Screenshot salva em {screenshot_path}")
+        raise Exception(f"Erro ao acessar o processo: {e}")
 
-# Defina seus identificadores e XPaths
+# Identificadores e XPaths para interagir com elementos específicos na página
 IFRAME_VISUALIZACAO_ID = "ifrVisualizacao"
 BUTTON_XPATH_GERAR_PDF = '//*[@id="divArvoreAcoes"]/a[7]/img'  # XPath para o botão 'Gerar PDF'
 BUTTON_XPATH_DOWNLOAD_OPTION = '//*[@id="divInfraBarraComandosSuperior"]/button[1]'  # XPath para a opção de download
@@ -173,97 +147,85 @@ BUTTON_XPATH_DOWNLOAD_OPTION = '//*[@id="divInfraBarraComandosSuperior"]/button[
 def generate_and_download_pdf(page, download_dir):
     """
     Gera e baixa o PDF do processo no iframe correspondente.
+    
     :param page: Instância do Playwright Page.
     :param download_dir: Diretório para salvar o download.
+    :return: Caminho do arquivo PDF baixado.
     """
     try:
-        # Espera pelo iframe e obtém o handle
-        logging.info(f"Esperando pelo iframe com ID {IFRAME_VISUALIZACAO_ID}")
+        # Localiza o iframe de visualização
         iframe_element = page.wait_for_selector(f'iframe#{IFRAME_VISUALIZACAO_ID}', timeout=10000)
         if not iframe_element:
             raise Exception(f"Iframe com ID {IFRAME_VISUALIZACAO_ID} não encontrado.")
-    
-        # Acessa o contexto do iframe
+
+        # Acessa o conteúdo do iframe
         iframe = iframe_element.content_frame()
         if not iframe:
             raise Exception("Não foi possível acessar o conteúdo do iframe.")
-    
-        logging.info("Iframe encontrado e acessado com sucesso.")
-    
-        # Espera pelo botão de gerar PDF dentro do iframe
-        logging.info(f"Esperando pelo botão de gerar PDF com XPath {BUTTON_XPATH_GERAR_PDF}")
+
+        # Localiza e clica no botão de gerar PDF dentro do iframe
         gerar_pdf_button = iframe.wait_for_selector(f'xpath={BUTTON_XPATH_GERAR_PDF}', timeout=10000)
         if not gerar_pdf_button:
             raise Exception("Botão para gerar PDF não encontrado.")
-    
-        # Clicar no botão 'Gerar PDF' para abrir as opções de download
-        logging.info("Clicando no botão 'Gerar Arquivo PDF do Processo'")
+
         gerar_pdf_button.click()
-        logging.info("Clique no botão 'Gerar Arquivo PDF do Processo' realizado.")
-    
-        # Opcional: esperar que as opções de download apareçam
-        time.sleep(2)  # Aguarda um breve momento para que as opções de download apareçam
-    
-        # Espera pelo botão de opção de download dentro do iframe
-        logging.info(f"Esperando pelo botão de opção de download com XPath {BUTTON_XPATH_DOWNLOAD_OPTION}")
+        time.sleep(2)  # Aguarda as opções de download aparecerem
+
+        # Localiza e clica na opção de download dentro do iframe
         download_option_button = iframe.wait_for_selector(f'xpath={BUTTON_XPATH_DOWNLOAD_OPTION}', timeout=10000)
         if not download_option_button:
             raise Exception("Botão de opção de download não encontrado.")
-    
-        # Clicar no botão de opção de download e capturar o download
-        logging.info("Clicando no botão de opção de download.")
+
         with page.expect_download(timeout=60000) as download_info_option:
             download_option_button.click()
         download_option = download_info_option.value
         download_option_path = handle_download(download_option, download_dir)
-        logging.info("Clique no botão de opção de download realizado.")
-    
-        # Retorna o caminho do download principal
+
         return download_option_path
-    
+
     except PlaywrightTimeoutError as e:
-        logging.error(f"Timeout ao gerar o PDF: {e}")
         raise Exception("Timeout ao gerar o PDF do processo.")
     except Exception as e:
-        logging.error(f"Erro ao gerar o PDF: {e}")
-        raise Exception("Erro ao gerar o PDF do processo.")
+        raise Exception(f"Erro ao gerar o PDF do processo: {e}")
     finally:
-        # Opcional: espera adicional se necessário
-        time.sleep(5)
+        time.sleep(5)  # Aguarda para garantir que o download seja concluído
 
 def process_notification(username, password, process_number):
     """
     Orquestra o processo de login, acesso ao processo e geração/baixa do PDF.
+    
+    :param username: Nome de usuário para login.
+    :param password: Senha para login.
+    :param process_number: Número do processo a ser acessado.
+    :return: Caminho do PDF baixado.
     """
     playwright, context, page = create_browser_context()
     download_dir = os.path.join(os.getcwd(), "downloads")
     try:
-        # Passo 1: Login
+        # Passo 1: Login no sistema
         login(page, username, password)
 
-        # Passo 2: Acessa o processo
+        # Passo 2: Acessa o processo específico
         access_process(page, process_number)
 
-        # Passo 3: Gera e baixa o PDF
-        try:
-            download_path = generate_and_download_pdf(page, download_dir)  # Função consolidada
-            logging.info(f"PDF gerado e salvo em: {download_path}")
-        except Exception as e:
-            logging.error(f"Erro ao gerar o PDF: {e}")
-            raise Exception("Erro durante o processo de geração do PDF.")
-
-        logging.info("PDF gerado com sucesso.")
-
+        # Passo 3: Gera e baixa o PDF do processo
+        download_path = generate_and_download_pdf(page, download_dir)
         return download_path  # Retorna o caminho do PDF baixado
     except Exception as e:
         logging.error(f"Erro durante o processamento: {e}")
         raise e
     finally:
-        # Fechar o navegador
+        # Fecha o navegador e para o Playwright
         context.close()
         playwright.stop()
 
 def normalize_text(text):
+    """
+    Normaliza o texto removendo acentuação e espaços extras.
+    
+    :param text: Texto a ser normalizado.
+    :return: Texto normalizado.
+    """
     if not isinstance(text, str):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
@@ -271,6 +233,12 @@ def normalize_text(text):
     return text.strip()
 
 def corrigir_texto(texto):
+    """
+    Corrige caracteres especiais comuns encontrados no texto extraído.
+    
+    :param texto: Texto a ser corrigido.
+    :return: Texto corrigido.
+    """
     substituicoes = {
         'Ã©': 'é',
         'Ã§Ã£o': 'ção',
@@ -297,6 +265,9 @@ def corrigir_texto(texto):
 def extract_information_spacy(text):
     """
     Extrai informações do texto utilizando spaCy.
+    
+    :param text: Texto extraído do PDF.
+    :return: Dicionário com informações extraídas.
     """
     doc = nlp(text)
 
@@ -309,13 +280,13 @@ def extract_information_spacy(text):
     }
 
     for ent in doc.ents:
-        if ent.label_ in ["PER", "ORG"]:  # Pessoa ou Organização
+        if ent.label_ in ["PER", "ORG"]:  # Entidades de Pessoa ou Organização
             if not info["nome_autuado"]:
                 info["nome_autuado"] = ent.text.strip()
         elif ent.label_ == "EMAIL":
             info["emails"].append(ent.text.strip())
 
-    # Usar regex para complementar a extração de CNPJ e CPF
+    # Padrões regex para CNPJ e CPF
     cnpj_pattern = r"CNPJ:\s*([\d./-]{18})"
     cpf_pattern = r"CPF:\s*([\d./-]{14})"
 
@@ -329,7 +300,7 @@ def extract_information_spacy(text):
         cpf = cpf_match.group(1)
         info["cpf"] = format_cpf(cpf)
 
-    # Sócios ou Advogados mencionados
+    # Padrão regex para sócios ou advogados
     socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
     info["socios_advogados"] = re.findall(socios_adv_pattern, text) or []
 
@@ -338,6 +309,9 @@ def extract_information_spacy(text):
 def format_cnpj(cnpj):
     """
     Formata o CNPJ no padrão XX.XXX.XXX/XXXX-XX
+    
+    :param cnpj: CNPJ sem formatação.
+    :return: CNPJ formatado.
     """
     digits = re.sub(r'\D', '', cnpj)
     if len(digits) != 14:
@@ -347,6 +321,9 @@ def format_cnpj(cnpj):
 def format_cpf(cpf):
     """
     Formata o CPF no padrão XXX.XXX.XXX-XX
+    
+    :param cpf: CPF sem formatação.
+    :return: CPF formatado.
     """
     digits = re.sub(r'\D', '', cpf)
     if len(digits) != 11:
@@ -354,6 +331,12 @@ def format_cpf(cpf):
     return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:11]}"
 
 def extract_process_number(file_name):
+    """
+    Extrai e formata o número do processo a partir do nome do arquivo PDF.
+    
+    :param file_name: Nome do arquivo PDF.
+    :return: Número do processo formatado.
+    """
     base_name = os.path.splitext(file_name)[0]
     if base_name.startswith("SEI"):
         base_name = base_name[3:].strip()
@@ -366,6 +349,9 @@ def extract_process_number(file_name):
 def extract_text_with_pypdf2(pdf_path):
     """
     Extrai texto de um PDF usando PyPDF2. Se não encontrar texto, tenta usar OCR.
+    
+    :param pdf_path: Caminho do arquivo PDF.
+    :return: Texto extraído.
     """
     try:
         reader = PdfReader(pdf_path)
@@ -376,12 +362,10 @@ def extract_text_with_pypdf2(pdf_path):
                 text += page_text
 
         if text.strip():
-            logging.info("Texto extraído com sucesso usando PyPDF2.")
             text = corrigir_texto(normalize_text(text))
             return text.strip()
         else:
-            logging.info("Nenhum texto encontrado com PyPDF2. Tentando OCR.")
-            # Usar OCR
+            # Usa OCR se nenhum texto foi encontrado
             return extract_text_with_ocr(pdf_path)
     except Exception as e:
         st.error(f"Erro ao processar PDF {pdf_path}: {e}")
@@ -390,15 +374,16 @@ def extract_text_with_pypdf2(pdf_path):
 def extract_text_with_ocr(pdf_path):
     """
     Extrai texto de um PDF baseado em imagem usando OCR.
+    
+    :param pdf_path: Caminho do arquivo PDF.
+    :return: Texto extraído via OCR.
     """
     try:
         # Converter PDF para imagens com maior DPI para melhor qualidade
-        logging.info("Convertendo PDF para imagens para OCR.")
         pages = convert_from_path(pdf_path, dpi=300, fmt='jpeg')  # Usando JPEG para melhor compressão
 
         text = ""
         for page_number, page in enumerate(pages, start=1):
-            logging.info(f"Processando página {page_number} com OCR.")
             # Pré-processamento da imagem para melhorar a precisão do OCR
             gray = page.convert('L')  # Converter para escala de cinza
             enhancer = ImageEnhance.Contrast(gray)
@@ -406,16 +391,14 @@ def extract_text_with_ocr(pdf_path):
             threshold = gray.point(lambda x: 0 if x < 128 else 255, '1')  # Aplicar threshold binário
             threshold = threshold.filter(ImageFilter.MedianFilter())
 
-            custom_config = r'--oem 3 --psm 6'  # OEM 3: LSTM + Legacy, PSM 6: Assume uma única unidade de texto uniforme
+            custom_config = r'--oem 3 --psm 6'  # Configurações do Tesseract
             page_text = pytesseract.image_to_string(threshold, lang='por', config=custom_config)
             text += page_text + "\n"
 
         if text.strip():
-            logging.info("Texto extraído com sucesso usando OCR.")
             text = corrigir_texto(normalize_text(text))
             return text.strip()
         else:
-            logging.warning("Nenhum texto encontrado mesmo após OCR.")
             return ''
     except Exception as e:
         st.error(f"Erro durante o OCR do PDF {pdf_path}: {e}")
@@ -424,16 +407,16 @@ def extract_text_with_ocr(pdf_path):
 def extract_addresses_spacy(text):
     """
     Extrai endereços do texto utilizando spaCy e complementa com regex, garantindo a unicidade e completude.
-    - Exclui endereços com Endereço: ou CEP: vazios ou nulos.
-    - Seleciona o endereço com mais caracteres para cada grupo baseado na normalização.
-    - Preenche os outros campos (cidade, bairro, estado) da melhor forma possível.
+    
+    :param text: Texto extraído do PDF.
+    :return: Lista de dicionários com informações de endereços.
     """
     doc = nlp(text)
 
     addresses = []
     seen_addresses = {}
 
-    # Padrões regex específicos
+    # Padrões regex específicos para endereços
     endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
     cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
     bairro_pattern = r"Bairro:\s*([\w\s]+)"
@@ -500,6 +483,9 @@ def extract_addresses_spacy(text):
 def normalize_address(address):
     """
     Normaliza o endereço removendo pontuação, convertendo para minúsculas e removendo espaços extras.
+    
+    :param address: Endereço a ser normalizado.
+    :return: Endereço normalizado.
     """
     address = unicodedata.normalize('NFKD', address).encode('ASCII', 'ignore').decode('utf-8')
     address = re.sub(r'[^\w\s]', '', address)  # Remove pontuação
@@ -507,6 +493,15 @@ def normalize_address(address):
     return address.lower().strip()
 
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
+    """
+    Adiciona um parágrafo ao documento Word com formatação opcional.
+    
+    :param doc: Objeto Document do python-docx.
+    :param texto: Texto do parágrafo.
+    :param negrito: Booleano para definir se o texto deve ser negrito.
+    :param tamanho: Tamanho da fonte.
+    :return: Parágrafo adicionado.
+    """
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
     run.bold = negrito
@@ -514,9 +509,17 @@ def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
     return paragrafo
 
 def _gerar_modelo_1(doc, info, enderecos, numero_processo, email_selecionado):
+    """
+    Gera o Documento Word no Modelo 1.
+    
+    :param doc: Objeto Document do python-docx.
+    :param info: Dicionário com informações extraídas.
+    :param enderecos: Lista de dicionários com endereços.
+    :param numero_processo: Número do processo formatado.
+    :param email_selecionado: Email selecionado pelo usuário.
+    """
     try:
-        # Adiciona o cabeçalho do documento
-        doc.add_paragraph("\n")
+        # Cabeçalho do documento
         adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
         nome_autuado = info.get('nome_autuado', '[Nome não informado]')
         cnpj = info.get('cnpj', '')
@@ -530,7 +533,8 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo, email_selecionado):
         adicionar_paragrafo(doc, f"{nome_autuado} – {identificador}")
         doc.add_paragraph("\n")
 
-        for idx, endereco in enumerate(enderecos, start=1):
+        # Informações de endereço
+        for endereco in enderecos:
             adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
@@ -538,6 +542,7 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo, email_selecionado):
             adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
 
+        # Assunto e Referência em negrito
         adicionar_paragrafo(doc, 
             "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", 
             negrito=True
@@ -547,6 +552,8 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo, email_selecionado):
             negrito=True
         )
         doc.add_paragraph("\n")
+
+        # Corpo do documento
         adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
         doc.add_paragraph("\n")
         adicionar_paragrafo(doc, 
@@ -554,6 +561,7 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo, email_selecionado):
         )
         doc.add_paragraph("\n")
 
+        # Seções do documento com formatação
         adicionar_paragrafo(doc, "O QUE FAZER SE A DECISÃO TIVER APLICADO MULTA?", negrito=True)
         adicionar_paragrafo(doc, 
             "Sendo aplicada a penalidade de multa, esta notificação estará acompanhada de boleto bancário, que deverá ser pago até o vencimento."
@@ -610,14 +618,26 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo, email_selecionado):
             "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo."
         )
         adicionar_paragrafo(doc, f"\nInformações de contato: {email_selecionado}")
-    
+
     except Exception as e:
         st.error(f"Erro ao gerar o documento no modelo 1: {e}")
 
 def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_decisao, data_recebimento_notificacao, data_extincao=None, email_selecionado=None):
+    """
+    Gera o Documento Word no Modelo 2.
+    
+    :param doc: Objeto Document do python-docx.
+    :param info: Dicionário com informações extraídas.
+    :param enderecos: Lista de dicionários com endereços.
+    :param numero_processo: Número do processo formatado.
+    :param motivo_revisao: Motivo da revisão da decisão.
+    :param data_decisao: Data da decisão original.
+    :param data_recebimento_notificacao: Data de recebimento da notificação.
+    :param data_extincao: Data de extinção da empresa (se aplicável).
+    :param email_selecionado: Email selecionado pelo usuário.
+    """
     try:
-        # Adiciona o cabeçalho do documento
-        doc.add_paragraph("\n")
+        # Cabeçalho do documento
         adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
         nome_autuado = info.get('nome_autuado', '[Nome não informado]')
         cnpj = info.get('cnpj', '')
@@ -631,7 +651,8 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_
         adicionar_paragrafo(doc, f"{nome_autuado} – {identificador}")
         doc.add_paragraph("\n")
 
-        for idx, endereco in enumerate(enderecos, start=1):
+        # Informações de endereço
+        for endereco in enderecos:
             adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
@@ -639,6 +660,7 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_
             adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
 
+        # Assunto e Referência em negrito
         adicionar_paragrafo(doc, 
             "Assunto: Decisão de 1ª instância proferida pela Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias.", 
             negrito=True
@@ -649,15 +671,15 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_
         )
         doc.add_paragraph("\n")
         
+        # Corpo do documento com conteúdo adaptado
         adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
         doc.add_paragraph("\n")
-        
-        # Texto Adaptado
         adicionar_paragrafo(doc, 
             f"Informamos que a Decisão em 1ª instância proferida pela Gerência-Geral de Portos, Aeroportos, Fronteiras e Recintos Alfandegados ou Coordenação de Atuação Administrativa e Julgamento das Infrações Sanitárias, em {data_decisao.strftime('%d/%m/%Y')}, no processo administrativo sancionador em referência, foi revisada ou retratada no âmbito da Anvisa pelos motivos expostos abaixo."
         )
         doc.add_paragraph("\n")
         
+        # Condições baseadas no motivo da revisão
         if motivo_revisao == "insuficiencia_provas":
             adicionar_paragrafo(doc, 
                 "Foi constatado que não há comprovação suficiente nos autos do processo para afirmar que a recorrente cometeu a infração objeto da autuação em questão."
@@ -673,7 +695,7 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_
                 f"Foi constatado, ao longo dos procedimentos de cobrança administrativa, que a empresa em questão havia sido 'EXTINTA' na data de {data_extincao.strftime('%d/%m/%Y')}, conforme Certidão Simplificada e documento de Distrato Social fornecido pelo órgão de registro comercial - [Nome do Órgão]."
             )
         else:
-            # Para outros motivos, você pode adaptar conforme necessário
+            # Para outros motivos, conteúdo genérico
             adicionar_paragrafo(doc, 
                 "Foi constatado que há razões adicionais para a revisão/retratação da decisão, conforme detalhado nos documentos anexos."
             )
@@ -718,11 +740,20 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo, motivo_revisao, data_
         st.error(f"Erro ao gerar o documento no modelo 2: {e}")
 
 def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario_email, orgao_registro_comercial, email_selecionado):
+    """
+    Gera o Documento Word no Modelo 3.
+    
+    :param doc: Objeto Document do python-docx.
+    :param info: Dicionário com informações extraídas.
+    :param enderecos: Lista de dicionários com endereços.
+    :param numero_processo: Número do processo formatado.
+    :param usuario_nome: Nome do usuário que está gerando o documento.
+    :param usuario_email: Email do usuário.
+    :param orgao_registro_comercial: Órgão de registro comercial.
+    :param email_selecionado: Email selecionado pelo usuário.
+    """
     try:
-        # Adiciona uma quebra de linha no início
-        doc.add_paragraph("\n")
-        
-        # Adiciona o cabeçalho do documento
+        # Cabeçalho do documento
         adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
         nome_autuado = info.get('nome_autuado', '[Nome não informado]')
         cnpj = info.get('cnpj', '')
@@ -736,8 +767,8 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario
         adicionar_paragrafo(doc, f"{nome_autuado} – {identificador}")
         doc.add_paragraph("\n")
 
-        # Adiciona os endereços
-        for idx, endereco in enumerate(enderecos, start=1):
+        # Informações de endereço
+        for endereco in enderecos:
             adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
@@ -745,31 +776,26 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario
             adicionar_paragrafo(doc, f"CEP: {endereco.get('cep', '[Não informado]')}")
             doc.add_paragraph("\n")
         
-        # Adiciona o assunto e referência em negrito
+        # Assunto e Referência em negrito
         adicionar_paragrafo(doc, "Assunto: Decisão proferida pela Diretoria Colegiada", negrito=True)
         adicionar_paragrafo(doc, f"Referência: Processo Administrativo Sancionador nº {numero_processo}", negrito=True)
         doc.add_paragraph("\n")
         
-        # Saudação
+        # Corpo do documento com conteúdo específico
         adicionar_paragrafo(doc, "Prezado(a) Senhor(a),")
         doc.add_paragraph("\n")
-        
-        # Corpo do documento
         adicionar_paragrafo(doc, 
             "Informamos que foi proferido julgamento da Diretoria Colegiada no processo administrativo sancionador em referência, conforme decisão em anexo, contra a qual não cabe recurso."
         )
         adicionar_paragrafo(doc, "\n")
-        
         adicionar_paragrafo(doc, 
             "Em sendo mantida a penalidade de multa, esta notificação estará acompanhada de boleto bancário. Exceto para a decisão, cujo recurso tenha sido considerado intempestivo, um vez que o boleto será encaminhado pela Gerência de Gestão de Arrecadação – GEGAR."
         )
         adicionar_paragrafo(doc, "\n")
-        
         adicionar_paragrafo(doc, 
             "O não pagamento do boleto, caso devido, acarretará, sucessivamente: i) a inscrição do devedor no Cadastro Informativo de Crédito não Quitado do Setor Público Federal (CADIN); ii) a inscrição do débito em dívida ativa da União; iii) o ajuizamento de ação de execução fiscal contra o devedor; e iv) a comunicação aos cartórios de registros de imóveis, dos devedores inscritos em dívida ativa ou execução fiscal."
         )
         adicionar_paragrafo(doc, "\n")
-        
         adicionar_paragrafo(doc, 
             "Esclarecemos que, em caso de penalidade de multa, seu valor foi atualizado pela taxa Selic acumulada nos termos do art. 37-A da Lei 10.522/2002 e no art. 5º do Decreto-Lei 1.736/79."
         )
@@ -800,7 +826,7 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario
         # Informações de contato
         adicionar_paragrafo(doc, f"\nInformações de contato: {email_selecionado}")
         
-        # Encerramento
+        # Encerramento do documento
         adicionar_paragrafo(doc, "Atenciosamente,")
         adicionar_paragrafo(doc, "\n")
         adicionar_paragrafo(doc, f"{usuario_nome}")
@@ -811,28 +837,38 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario
 def extract_all_emails(emails):
     """
     Remove duplicatas e retorna uma lista de emails únicos.
+    
+    :param emails: Lista de emails extraídos.
+    :return: Lista de emails únicos.
     """
     return list(set(emails))
 
 def main():
+    """
+    Função principal que define a interface e a lógica do aplicativo Streamlit.
+    """
     st.title("Gerador de Notificações SEI-Anvisa")
 
+    # Seção de login na barra lateral
     st.sidebar.header("Informações de Login")
     username = st.sidebar.text_input("Usuário")
     password = st.sidebar.text_input("Senha", type="password")
 
+    # Seção de entrada do número do processo
     st.header("Processo Administrativo")
     process_number_input = st.text_input("Número do Processo")
 
-    # Botão para gerar notificação
+    # Botão para iniciar a geração da notificação
     gerar_notificacao = st.button("Gerar Notificação")
 
     if gerar_notificacao:
+        # Validação dos campos obrigatórios
         if not username or not password or not process_number_input:
             st.error("Por favor, preencha todos os campos.")
         else:
             with st.spinner("Processando..."):
                 try:
+                    # Processa a notificação e obtém o caminho do PDF baixado
                     download_path = process_notification(username, password, process_number_input)
                     st.success("PDF gerado com sucesso!")
 
@@ -841,7 +877,7 @@ def main():
                         pdf_file_name = os.path.basename(download_path)
                         st.info(f"Arquivo PDF baixado: {pdf_file_name}")
 
-                        # Extrair o número do processo e formatar
+                        # Extrair e formatar o número do processo
                         numero_processo = extract_process_number(pdf_file_name)
 
                         # Extrair texto do PDF
@@ -855,7 +891,7 @@ def main():
 
                             # Exibir informações extraídas
                             st.subheader("Informações Extraídas")
-                            st.write(f"**Arquivo PDF:** {pdf_file_name}")  # Informar de qual arquivo a informação foi extraída
+                            st.write(f"**Arquivo PDF:** {pdf_file_name}")
                             st.write(f"**Nome Autuado:** {info.get('nome_autuado', 'Não informado')}")
                             if info.get('cnpj'):
                                 st.write(f"**CNPJ:** {info.get('cnpj')}")
@@ -864,6 +900,7 @@ def main():
                             st.write(f"**Emails:** {', '.join(emails) if emails else 'Não informado'}")
                             st.write(f"**Sócios/Advogados:** {', '.join(info.get('socios_advogados', []))}")
 
+                            # Exibir endereços encontrados
                             st.subheader("Endereços Encontrados")
                             for idx, end in enumerate(addresses, start=1):
                                 st.write(f"**Endereço {idx}:**")
@@ -873,7 +910,7 @@ def main():
                                 st.write(f"  - Estado: {end['estado']}")
                                 st.write(f"  - CEP: {end['cep']}")
 
-                            # Permitir ao usuário editar os endereços
+                            # Permitir ao usuário editar os endereços extraídos
                             st.subheader("Editar Endereços")
                             edited_addresses = []
                             for idx, end in enumerate(addresses, start=1):
@@ -914,6 +951,7 @@ def main():
         'numero_processo' in st.session_state and
         'pdf_file' in st.session_state):
         
+        # Seleção do modelo de documento
         st.subheader("Escolha o Modelo do Documento")
         modelo = st.selectbox("Selecione o modelo desejado:", [
             "ID 3791 - Notificação de decisões em 1ª instância - SEI", 
@@ -925,18 +963,19 @@ def main():
 
         if gerar_doc:
             try:
+                # Cria um novo documento Word
                 doc = Document()
                 info = st.session_state['info']
                 edited_addresses = st.session_state['enderecos']
                 numero_processo = st.session_state['numero_processo']
-                pdf_file_name = st.session_state['pdf_file']  # Obter o nome do arquivo PDF
+                pdf_file_name = st.session_state['pdf_file']
                 email_selecionado = st.session_state['email_selecionado']
 
-                # Solicitar informações adicionais conforme o modelo selecionado
+                # Solicita informações adicionais conforme o modelo selecionado
                 if modelo == "ID 3791 - Notificação de decisões em 1ª instância - SEI":
                     _gerar_modelo_1(doc, info, edited_addresses, numero_processo, email_selecionado)
                 elif modelo == "ID 2782 - Notificação de decisões revisadas/retratadas":
-                    # Solicitar informações adicionais necessárias para o modelo 2
+                    # Solicita motivo da revisão e datas relevantes
                     motivo_revisao = st.selectbox("Motivo da Revisão:", ["insuficiencia_provas", "prescricao", "extincao_empresa", "outros"])
                     data_decisao = st.date_input("Data da Decisão:")
                     data_recebimento_notificacao = st.date_input("Data de Recebimento da Notificação:")
@@ -957,7 +996,7 @@ def main():
                         email_selecionado
                     )
                 elif modelo == "ID 2703 - Notificação de decisão da DICOL":
-                    # Solicitar informações adicionais necessárias para o modelo 3
+                    # Solicita informações adicionais para o modelo 3
                     usuario_nome = st.text_input("Nome do Usuário:")
                     usuario_email = st.text_input("Email do Usuário:")
                     orgao_registro_comercial = st.text_input("Órgão de Registro Comercial:")
@@ -980,10 +1019,11 @@ def main():
                 doc.save(buffer)
                 buffer.seek(0)
 
-                # Nome do arquivo
+                # Definir o nome do arquivo de saída
                 modelo_id = re.findall(r'ID\s(\d+)', modelo)[0] if re.findall(r'ID\s(\d+)', modelo) else "unknown"
                 output_filename = f"Notificacao_Processo_Nº_{numero_processo}_modelo_{modelo_id}.docx"
 
+                # Botão para download do documento gerado
                 st.download_button(
                     label="Baixar Documento",
                     data=buffer,
@@ -996,7 +1036,7 @@ def main():
                 st.error(f"Ocorreu um erro ao gerar o documento: {ex}")
 
 if __name__ == '__main__':
-    # Carregar o modelo spaCy para português
+    # Carrega o modelo spaCy para português, instala se não estiver disponível
     try:
         nlp = spacy.load("pt_core_news_lg")
     except OSError:
