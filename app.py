@@ -7,6 +7,7 @@ import os
 import unicodedata
 import re
 import spacy
+import asyncio  # Adicionado para gerenciar loops de eventos
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from PyPDF2 import PdfReader
@@ -17,7 +18,17 @@ from io import BytesIO
 # Configuração de logs
 logging.basicConfig(level=logging.INFO)
 
-# Aplicação do nest_asyncio para permitir múltiplos loops de eventos (necessário se for rodar em notebook)
+# Garantir que um loop de eventos está ativo antes de aplicar nest_asyncio
+try:
+    loop = asyncio.get_event_loop()
+    if loop.is_closed():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+# Aplicação do nest_asyncio para permitir múltiplos loops de eventos (necessário se for rodar em notebook ou ambiente que não tenha loop ativo)
 nest_asyncio.apply()
 
 # Constantes de elementos
