@@ -1,13 +1,11 @@
 import streamlit as st
 import logging
-import nest_asyncio
+import asyncio
 import time
-import getpass
 import os
 import unicodedata
 import re
 import spacy
-import asyncio  # Adicionado para gerenciar loops de eventos
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from PyPDF2 import PdfReader
@@ -18,18 +16,21 @@ from io import BytesIO
 # Configuração de logs
 logging.basicConfig(level=logging.INFO)
 
-# Garantir que um loop de eventos está ativo antes de aplicar nest_asyncio
-try:
-    loop = asyncio.get_event_loop()
-    if loop.is_closed():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+# Configurar a política de loop de eventos para Windows
+if os.name == 'nt':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-# Aplicação do nest_asyncio para permitir múltiplos loops de eventos (necessário se for rodar em notebook ou ambiente que não tenha loop ativo)
-nest_asyncio.apply()
+# Remova ou comente as seguintes linhas se estiverem presentes
+# import nest_asyncio
+# try:
+#     loop = asyncio.get_event_loop()
+#     if loop.is_closed():
+#         loop = asyncio.new_event_loop()
+#         asyncio.set_event_loop(loop)
+# except RuntimeError:
+#     loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop)
+# nest_asyncio.apply()
 
 # Constantes de elementos
 LOGIN_URL = "https://sei.anvisa.gov.br/sip/login.php?sigla_orgao_sistema=ANVISA&sigla_sistema=SEI"
@@ -593,8 +594,6 @@ def main():
                             )
                             st.success("Documento gerado e pronto para download!")
 
-                    else:
-                        st.error("Não foi possível extrair texto do arquivo PDF.")
                 else:
                     st.error("Nenhum arquivo PDF encontrado no diretório de downloads.")
             except Exception as ex:
