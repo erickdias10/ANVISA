@@ -2,193 +2,240 @@ import streamlit as st
 import logging
 import nest_asyncio
 import time
+import getpass
 import os
-import tempfile
 import unicodedata
 import re
 import spacy
-import shutil
 
-from selenium.common.exceptions import TimeoutException
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.alert import Alert
-from webdriver_manager.chrome import ChromeDriverManager
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from PyPDF2 import PdfReader
 from docx import Document
 from docx.shared import Pt
+from io import BytesIO
+
+# Configuração de logs
+logging.basicConfig(level=logging.INFO)
 
 # Aplicação do nest_asyncio para permitir múltiplos loops de eventos (necessário se for rodar em notebook)
 nest_asyncio.apply()
 
-# Configuração de logs para Streamlit
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Função para carregar o modelo spaCy
-def load_spacy_model():
-    model_name = "pt_core_news_sm"  # Use "pt_core_news_lg" se preferir um modelo maior
-    if not spacy.util.is_package(model_name):
-        from spacy.cli import download
-        with st.spinner("Baixando modelo spaCy (isso pode levar alguns minutos)..."):
-            download(model_name)
-    return spacy.load(model_name)
-
-# Carregar o modelo
-nlp = load_spacy_model()
-
 # Constantes de elementos
 LOGIN_URL = "https://sei.anvisa.gov.br/sip/login.php?sigla_orgao_sistema=ANVISA&sigla_sistema=SEI"
-IFRAME_VISUALIZACAO_ID = "ifrVisualizacao"
-BUTTON_XPATH_ALT = '//img[@title="Gerar Arquivo PDF do Processo"]/parent::a'
 
-# Funções existentes
-def create_driver(download_dir=None):
-    if download_dir is None:
-        # Usar um diretório temporário
-        download_dir = tempfile.mkdtemp()
-    
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Executa o Chrome em modo headless
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")  # Necessário em alguns ambientes de nuvem
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-popup-blocking")
-    chrome_options.add_argument("--disable-notifications")
-    
-    prefs = {
-        "download.default_directory": download_dir,
-        "download.prompt_for_download": False,
-        "plugins.always_open_pdf_externally": True,
-    }
-    chrome_options.add_experimental_option("prefs", prefs)
+def create_browser_context():
+    """
+    Configura e retorna uma instância do Playwright BrowserContext e Page,
+    utilizando um diretório de dados de usuário persistente para manter a sessão.
+    """
+    download_dir = os.path.join(os.getcwd(), "downloads")
+    os.makedirs(download_dir, exist_ok=True)
 
-    chrome_options.set_capability("unhandledPromptBehavior", "ignore")
+    # Diretório para armazenar dados de usuário persistentes
+    user_data_dir = os.path.join(os.getcwd(), "user_data")
+    os.makedirs(user_data_dir, exist_ok=True)
 
-    # Especificar o caminho do Chromium instalado via apt
-    chrome_options.binary_location = "/usr/bin/chromium"
+    playwright = sync_playwright().start()
+    context = playwright.chromium.launch_persistent_context(
+        user_data_dir=user_data_dir,
+        headless=True,  # True para rodar em modo headless no servidor
+        accept_downloads=True,  # Permite downloads automáticos
+        downloads_path=download_dir  # Define o diretório de downloads
+    )
+    page = context.new_page()
+    return playwright, context, page
 
-    # Utilizar webdriver-manager para gerenciar o ChromeDriver
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    return driver
-
-def wait_for_element(driver, by, value, timeout=20):
+def wait_for_element(page, selector, timeout=20000):
+    """
+    Aguarda até que um elemento esteja presente no DOM.
+    """
     try:
-        logger.info(f"Aguardando elemento: {value}")
-        element = WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((by, value))
-        )
-        return element
-    except Exception as e:
-        logger.error(f"Erro ao localizar o elemento: {value}")
-        raise Exception(f"Elemento {value} não encontrado na página.") from e
+        logging.info(f"Aguardando elemento: {selector}")
+        element = page.wait_for_selector(selector, timeout=timeout)
+        if element:
+            return element
+    except PlaywrightTimeoutError:
+        logging.error(f"Erro ao localizar o elemento: {selector}")
+        raise Exception(f"Elemento {selector} não encontrado na página.")
+    return None
 
-def handle_alert(driver):
+def handle_download(download, download_dir):
+    """
+    Manipula o download, salvando-o no diretório de downloads especificado.
+    """
+    os.makedirs(download_dir, exist_ok=True)
+    download_path = os.path.join(download_dir, download.suggested_filename)
+    download.save_as(download_path)
+    logging.info(f"Download salvo em: {download_path}")
+    return download_path
+
+def handle_alert(page):
+    """
+    Captura e trata alertas inesperados sem recarregar a página.
+    """
     try:
-        WebDriverWait(driver, 5).until(EC.alert_is_present())
-        alert = Alert(driver)
-        alert_text = alert.text
-        logger.warning(f"Alerta inesperado encontrado: {alert_text}")
-        alert.accept()
-        return alert_text
-    except Exception:
-        logger.info("Nenhum alerta encontrado.")
+        dialog = page.expect_event("dialog", timeout=5000)
+        if dialog:
+            alert_text = dialog.message
+            logging.warning(f"Alerta inesperado encontrado: {alert_text}")
+            dialog.accept()
+            return alert_text
+    except PlaywrightTimeoutError:
+        logging.info("Nenhum alerta encontrado.")
         return None
 
-def login(driver, username, password):
-    logger.info("Acessando a página de login.")
-    driver.get(LOGIN_URL)
-    wait_for_element(driver, By.ID, "txtUsuario").send_keys(username)
-    driver.find_element(By.ID, "pwdSenha").send_keys(password)
-    driver.find_element(By.ID, "sbmAcessar").click()
+def login(page, username, password):
+    """
+    Realiza o login no sistema SEI.
+    """
+    logging.info("Acessando a página de login.")
+    page.goto(LOGIN_URL)
 
-def access_process(driver, process_number):
-    search_field = wait_for_element(driver, By.ID, "txtPesquisaRapida")
-    search_field.send_keys(process_number)
-    search_field.send_keys("\n")
-    logger.info("Processo acessado com sucesso.")
-    time.sleep(3)
+    # Aguarda o campo de usuário aparecer e preenche
+    user_field = wait_for_element(page, "#txtUsuario")
+    if user_field:
+        user_field.fill(username)
+        logging.info("Campo de usuário preenchido.")
+    else:
+        raise Exception("Campo de usuário não encontrado.")
 
-def generate_pdf(driver):
+    # Aguarda o campo de senha aparecer e preenche
+    password_field = wait_for_element(page, "#pwdSenha")
+    if password_field:
+        password_field.fill(password)
+        logging.info("Campo de senha preenchido.")
+    else:
+        raise Exception("Campo de senha não encontrado.")
+
+    # Aguarda o botão de login aparecer e clica
+    login_button = wait_for_element(page, "#sbmAcessar")
+    if login_button:
+        login_button.click()
+        logging.info("Botão de login clicado.")
+    else:
+        raise Exception("Botão de login não encontrado.")
+
+    # Aguarda a página principal carregar após login
     try:
-        driver.switch_to.frame(
-            wait_for_element(driver, By.ID, IFRAME_VISUALIZACAO_ID)
-        )
-        gerar_pdf_button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, BUTTON_XPATH_ALT))
-        )
-        driver.execute_script("arguments[0].click();", gerar_pdf_button)
-        logger.info("Clique no botão 'Gerar Arquivo PDF do Processo' realizado.")
-        return "PDF gerado com sucesso."
+        page.wait_for_load_state("networkidle", timeout=10000)
+        logging.info("Login realizado com sucesso.")
+    except PlaywrightTimeoutError:
+        logging.error("Tempo esgotado aguardando a página principal carregar após login.")
+        raise Exception("Login pode não ter sido realizado com sucesso.")
+
+def access_process(page, process_number):
+    """
+    Acessa um processo pelo número no sistema SEI.
+    """
+    search_field = wait_for_element(page, "#txtPesquisaRapida")
+    search_field.fill(process_number)
+    search_field.press("Enter")
+    logging.info("Processo acessado com sucesso.")
+    time.sleep(3)  # Aguarda a página carregar resultados
+
+# Defina seus identificadores e XPaths
+IFRAME_VISUALIZACAO_ID = "ifrVisualizacao"
+BUTTON_XPATH_GERAR_PDF = '//*[@id="divArvoreAcoes"]/a[7]/img'  # XPath para o botão 'Gerar PDF'
+BUTTON_XPATH_DOWNLOAD_OPTION = '//*[@id="divInfraBarraComandosSuperior"]/button[1]'  # XPath para a opção de download
+
+def generate_and_download_pdf(page, download_dir):
+    """
+    Gera e baixa o PDF do processo no iframe correspondente.
+    :param page: Instância do Playwright Page.
+    :param download_dir: Diretório para salvar o download.
+    """
+    try:
+        # Espera pelo iframe e obtém o handle
+        logging.info(f"Esperando pelo iframe com ID {IFRAME_VISUALIZACAO_ID}")
+        iframe_element = page.wait_for_selector(f'iframe#{IFRAME_VISUALIZACAO_ID}', timeout=10000)
+        if not iframe_element:
+            raise Exception(f"Iframe com ID {IFRAME_VISUALIZACAO_ID} não encontrado.")
+        
+        # Acessa o contexto do iframe
+        iframe = iframe_element.content_frame()
+        if not iframe:
+            raise Exception("Não foi possível acessar o conteúdo do iframe.")
+
+        logging.info("Iframe encontrado e acessado com sucesso.")
+
+        # Espera pelo botão de gerar PDF dentro do iframe
+        logging.info(f"Esperando pelo botão de gerar PDF com XPath {BUTTON_XPATH_GERAR_PDF}")
+        gerar_pdf_button = iframe.wait_for_selector(f'xpath={BUTTON_XPATH_GERAR_PDF}', timeout=10000)
+        if not gerar_pdf_button:
+            raise Exception("Botão para gerar PDF não encontrado.")
+
+        # Clicar no botão 'Gerar PDF' para abrir as opções de download
+        logging.info("Clicando no botão 'Gerar Arquivo PDF do Processo'")
+        gerar_pdf_button.click()
+        logging.info("Clique no botão 'Gerar Arquivo PDF do Processo' realizado.")
+
+        # Opcional: esperar que as opções de download apareçam
+        time.sleep(2)  # Aguarda um breve momento para que as opções de download apareçam
+
+        # Espera pelo botão de opção de download dentro do iframe
+        logging.info(f"Esperando pelo botão de opção de download com XPath {BUTTON_XPATH_DOWNLOAD_OPTION}")
+        download_option_button = iframe.wait_for_selector(f'xpath={BUTTON_XPATH_DOWNLOAD_OPTION}', timeout=10000)
+        if not download_option_button:
+            raise Exception("Botão de opção de download não encontrado.")
+
+        # Clicar no botão de opção de download e capturar o download
+        logging.info("Clicando no botão de opção de download.")
+        with page.expect_download(timeout=60000) as download_info_option:
+            download_option_button.click()
+        download_option = download_info_option.value
+        download_option_path = handle_download(download_option, download_dir)
+        logging.info("Clique no botão de opção de download realizado.")
+
+        # Retorna o caminho do download principal
+        return download_option_path
+
+    except PlaywrightTimeoutError as e:
+        logging.error(f"Timeout ao gerar o PDF: {e}")
+        raise Exception("Timeout ao gerar o PDF do processo.")
     except Exception as e:
-        logger.error(f"Erro ao gerar o PDF: {e}")
+        logging.error(f"Erro ao gerar o PDF: {e}")
         raise Exception("Erro ao gerar o PDF do processo.")
     finally:
-        driver.switch_to.default_content()
+        # Opcional: espera adicional se necessário
         time.sleep(5)
 
-def download_pdf(driver, option="Todos os documentos disponíveis"):
+def process_notification(username, password, process_number):
+    """
+    Orquestra o processo de login, acesso ao processo e geração/baixa do PDF.
+    """
+    playwright, context, page = create_browser_context()
+    download_dir = os.path.join(os.getcwd(), "downloads")
     try:
-        # Acessar o iframe 'ifrVisualizacao' e selecionar a opção de download
-        dropdown_options = WebDriverWait(driver, 10).until(
-            EC.presence_of_all_elements_located((By.XPATH, '//div[@class="menu-opcao"]//button'))
-        )
-        logger.info("Opções de download detectadas.")
+        # Passo 1: Login
+        login(page, username, password)
 
-        for option_button in dropdown_options:
-            if option_button.text.strip() == option:
-                driver.execute_script("arguments[0].click();", option_button)
-                logger.info(f"Opção '{option}' selecionada com sucesso.")
-                break
-        else:
-            logger.warning(f"Opção '{option}' não encontrada. Prosseguindo sem selecionar opção.")
+        # Passo 2: Acessa o processo
+        access_process(page, process_number)
 
-        time.sleep(5)
-        logger.info("Download iniciado (ou já realizado com sucesso).")
-
-    except Exception as e:
-        logger.error(f"Erro ao tentar baixar o PDF: {e}")
-        raise Exception("Erro durante o processo de download do PDF.") from e
-
-def process_notification(username: str, password: str, process_number: str, download_dir):
-    driver = create_driver(download_dir)
-    try:
-        login(driver, username, password)
-        access_process(driver, process_number)
-        generate_pdf(driver)
+        # Passo 3: Gera e baixa o PDF
         try:
-            download_pdf(driver, option="Todos os documentos disponíveis")
+            download_path = generate_and_download_pdf(page, download_dir)  # Função consolidada
+            logging.info(f"PDF gerado e salvo em: {download_path}")
         except Exception as e:
-            logger.warning(f"Erro não crítico no download_pdf: {e}")
+            logging.error(f"Erro ao gerar o PDF: {e}")
+            raise Exception("Erro durante o processo de geração do PDF.")
 
-        logger.info("Aguardando alguns segundos para permitir o download do PDF...")
-        time.sleep(10)
+        logging.info("PDF gerado com sucesso.")
 
-        # Encontrar o arquivo PDF baixado
-        files = [f for f in os.listdir(download_dir) if f.lower().endswith('.pdf')]
-        if not files:
-            raise Exception("Nenhum arquivo PDF foi baixado.")
-        latest_file = max([os.path.join(download_dir, f) for f in files], key=os.path.getmtime)
-
-        return latest_file
+        return download_path  # Retorna o caminho do PDF baixado
     except Exception as e:
-        logger.exception("Erro durante o processamento.")
+        logging.error(f"Erro durante o processamento: {e}")
         raise e
     finally:
-        driver.quit()
+        # Fechar o navegador
+        context.close()
+        playwright.stop()
 
-# Funções Auxiliares
 def normalize_text(text):
     if not isinstance(text, str):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    text = re.sub(r"\s{2,}", " ", text)
+    text = re.sub(r"\s{2,}", " ", text)  # Remove múltiplos espaços
     return text.strip()
 
 def corrigir_texto(texto):
@@ -213,10 +260,13 @@ def extract_text_with_pypdf2(pdf_path):
         text = corrigir_texto(normalize_text(text))
         return text.strip()
     except Exception as e:
-        logger.error(f"Erro ao processar PDF {pdf_path}: {e}")
+        st.error(f"Erro ao processar PDF {pdf_path}: {e}")
         return ''
 
 def extract_information_spacy(text):
+    """
+    Extrai informações do texto utilizando spaCy.
+    """
     doc = nlp(text)
 
     info = {
@@ -227,28 +277,34 @@ def extract_information_spacy(text):
     }
 
     for ent in doc.ents:
-        if ent.label_ in ["PER", "ORG"]:
+        if ent.label_ in ["PER", "ORG"]:  # Pessoa ou Organização
             if not info["nome_autuado"]:
                 info["nome_autuado"] = ent.text.strip()
         elif ent.label_ == "EMAIL":
             info["emails"].append(ent.text.strip())
 
+    # Usar regex para complementar a extração de CNPJ/CPF
     cnpj_cpf_pattern = r"(?:CNPJ|CPF):\s*([\d./-]+)"
     match = re.search(cnpj_cpf_pattern, text)
     if match:
         info["cnpj_cpf"] = match.group(1)
 
+    # Sócios ou Advogados mencionados
     socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
     info["socios_advogados"] = re.findall(socios_adv_pattern, text) or []
 
     return info
 
 def extract_addresses_spacy(text):
+    """
+    Extrai endereços do texto utilizando spaCy e complementa com regex.
+    """
     doc = nlp(text)
 
     addresses = []
     seen_addresses = set()
 
+    # Usar regex para capturar padrões específicos
     endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
     cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
     bairro_pattern = r"Bairro:\s*([\w\s]+)"
@@ -295,6 +351,7 @@ def extract_process_number(file_name):
 
 def _gerar_modelo_1(doc, info, enderecos, numero_processo):
     try:
+        # Adiciona o cabeçalho do documento
         doc.add_paragraph("\n")
         adicionar_paragrafo(doc, "Ao(a) Senhor(a):")
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
@@ -380,8 +437,9 @@ def _gerar_modelo_1(doc, info, enderecos, numero_processo):
             "2. Procuração e documento de identificação do outorgado (advogado ou representante), caso constituído para atuar no processo."
         )
         doc.add_paragraph("\n")
+
     except Exception as e:
-        logger.error(f"Erro ao gerar o documento no modelo 1: {e}")
+        st.error(f"Erro ao gerar o documento no modelo 1: {e}")
 
 def _gerar_modelo_2(doc, info, enderecos, numero_processo):
     try:
@@ -390,7 +448,7 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo):
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
-        for endereco in enderecos:
+        for idx, endereco in enumerate(enderecos, start=1):
             adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
@@ -405,7 +463,7 @@ def _gerar_modelo_2(doc, info, enderecos, numero_processo):
         doc.add_paragraph("\n")
 
     except Exception as e:
-        logger.error(f"Erro ao gerar o documento no modelo 2: {e}")
+        st.error(f"Erro ao gerar o documento no modelo 2: {e}")
 
 def _gerar_modelo_3(doc, info, enderecos, numero_processo):
     try:
@@ -414,7 +472,7 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo):
         adicionar_paragrafo(doc, f"{info.get('nome_autuado', '[Nome não informado]')} – CNPJ/CPF: {info.get('cnpj_cpf', '[CNPJ/CPF não informado]')}")
         doc.add_paragraph("\n")
 
-        for endereco in enderecos:
+        for idx, endereco in enumerate(enderecos, start=1):
             adicionar_paragrafo(doc, f"Endereço: {endereco.get('endereco', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Cidade: {endereco.get('cidade', '[Não informado]')}")
             adicionar_paragrafo(doc, f"Bairro: {endereco.get('bairro', '[Não informado]')}")
@@ -429,179 +487,115 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo):
         doc.add_paragraph("\n")
 
     except Exception as e:
-        logger.error(f"Erro ao gerar o documento no modelo 3: {e}")
+        st.error(f"Erro ao gerar o documento no modelo 3: {e}")
 
-def escolher_enderecos(enderecos):
-    if not enderecos:
-        st.warning("Nenhum endereço encontrado para editar.")
-        return []
-
-    selected_addresses = []
-    st.subheader("Endereços Detectados")
-
-    for i, end in enumerate(enderecos, start=1):
-        with st.expander(f"Endereço {i}"):
-            st.write(f"**Endereço:** {end['endereco']}")
-            st.write(f"**Cidade:** {end['cidade']}")
-            st.write(f"**Bairro:** {end['bairro']}")
-            st.write(f"**Estado:** {end['estado']}")
-            st.write(f"**CEP:** {end['cep']}")
-
-            keep = st.checkbox(f"Deseja manter este endereço? (Endereço {i})", value=True, key=f"keep_{i}")
-            if keep:
-                edit = st.checkbox(f"Deseja editar este endereço? (Endereço {i})", key=f"edit_{i}")
-                if edit:
-                    end['endereco'] = st.text_input(f"Endereço [{end['endereco']}]:", value=end['endereco'], key=f"endereco_{i}")
-                    end['cidade'] = st.text_input(f"Cidade [{end['cidade']}]:", value=end['cidade'], key=f"cidade_{i}")
-                    end['bairro'] = st.text_input(f"Bairro [{end['bairro']}]:", value=end['bairro'], key=f"bairro_{i}")
-                    end['estado'] = st.text_input(f"Estado [{end['estado']}]:", value=end['estado'], key=f"estado_{i}")
-                    end['cep'] = st.text_input(f"CEP [{end['cep']}]:", value=end['cep'], key=f"cep_{i}")
-                selected_addresses.append(end)
-
-    return selected_addresses
-
-def get_latest_downloaded_file(download_directory):
-    try:
-        files = [os.path.join(download_directory, f) for f in os.listdir(download_directory) if os.path.isfile(os.path.join(download_directory, f))]
-        files = [f for f in files if f.lower().endswith('.pdf')]
-        latest_file = max(files, key=os.path.getmtime) if files else None
-        return latest_file
-    except Exception as e:
-        logger.error(f"Erro ao acessar o diretório de downloads: {e}")
-        return None
-
-# Interface do Streamlit
 def main():
-    st.title("Automação de Notificações SEI-Anvisa")
+    st.title("Gerador de Notificações SEI-Anvisa")
 
-    st.sidebar.header("Configurações")
-
-    # Inputs do Usuário
+    st.sidebar.header("Informações de Login")
     username = st.sidebar.text_input("Usuário")
     password = st.sidebar.text_input("Senha", type="password")
-    process_number = st.sidebar.text_input("Número do Processo")
-    # Diretório de downloads será um diretório temporário
-    download_directory = tempfile.mkdtemp(prefix="downloads_")
 
-    st.sidebar.write("**Diretório de Downloads:**")
-    st.sidebar.write(download_directory)
+    st.header("Processo Administrativo")
+    process_number = st.text_input("Número do Processo")
 
-    if st.sidebar.button("Iniciar Processo"):
+    if st.button("Gerar Notificação"):
         if not username or not password or not process_number:
             st.error("Por favor, preencha todos os campos.")
-        else:
-            with st.spinner("Processando..."):
-                try:
-                    latest_pdf = process_notification(username, password, process_number, download_directory)
-                    st.success("PDF gerado e baixado automaticamente.")
+            return
 
-                    # Exibir o caminho do PDF (opcional)
-                    st.write(f"PDF salvo em: {latest_pdf}")
+        with st.spinner("Processando..."):
+            try:
+                download_path = process_notification(username, password, process_number)
+                st.success("PDF gerado com sucesso!")
 
-                    # Extrair texto do PDF
-                    text = extract_text_with_pypdf2(latest_pdf)
+                if download_path:
+                    st.info(f"Arquivo PDF baixado: {download_path}")
+                    numero_processo = extract_process_number(os.path.basename(download_path))
+                    text = extract_text_with_pypdf2(download_path)
 
                     if text:
                         st.success("Texto extraído com sucesso!")
-                        numero_processo = extract_process_number(os.path.basename(latest_pdf))
                         info = extract_information_spacy(text)
                         addresses = extract_addresses_spacy(text)
 
+                        # Exibir informações extraídas
+                        st.subheader("Informações Extraídas")
+                        st.write(f"**Nome Autuado:** {info.get('nome_autuado', 'Não informado')}")
+                        st.write(f"**CNPJ/CPF:** {info.get('cnpj_cpf', 'Não informado')}")
+                        st.write(f"**Emails:** {', '.join(info.get('emails', []))}")
+                        st.write(f"**Sócios/Advogados:** {', '.join(info.get('socios_advogados', []))}")
+
+                        st.subheader("Endereços Encontrados")
+                        for idx, end in enumerate(addresses, start=1):
+                            st.write(f"**Endereço {idx}:**")
+                            st.write(f"  - Endereço: {end['endereco']}")
+                            st.write(f"  - Cidade: {end['cidade']}")
+                            st.write(f"  - Bairro: {end['bairro']}")
+                            st.write(f"  - Estado: {end['estado']}")
+                            st.write(f"  - CEP: {end['cep']}")
+
                         # Permitir ao usuário editar os endereços
-                        addresses = escolher_enderecos(addresses)
+                        st.subheader("Editar Endereços")
+                        edited_addresses = []
+                        for idx, end in enumerate(addresses, start=1):
+                            st.write(f"**Endereço {idx}:**")
+                            endereco = st.text_input(f"Endereço {idx}", value=end['endereco'])
+                            cidade = st.text_input(f"Cidade {idx}", value=end['cidade'])
+                            bairro = st.text_input(f"Bairro {idx}", value=end['bairro'])
+                            estado = st.text_input(f"Estado {idx}", value=end['estado'])
+                            cep = st.text_input(f"CEP {idx}", value=end['cep'])
+                            edited_addresses.append({
+                                "endereco": endereco,
+                                "cidade": cidade,
+                                "bairro": bairro,
+                                "estado": estado,
+                                "cep": cep
+                            })
 
-                        # Escolher o modelo do documento
-                        modelo = st.selectbox("Escolha o modelo do documento:", ["Modelo 1", "Modelo 2", "Modelo 3"])
+                        # Escolha do modelo de documento
+                        st.subheader("Escolha o Modelo do Documento")
+                        modelo = st.selectbox("Selecione o modelo desejado:", ["Modelo 1", "Modelo 2", "Modelo 3"])
 
-                        if st.button("Gerar Documento"):
+                        if st.button("Gerar Documento Word"):
                             doc = Document()
                             if modelo == "Modelo 1":
-                                _gerar_modelo_1(doc, info, addresses, numero_processo)
-                                tipo_documento = 1
+                                _gerar_modelo_1(doc, info, edited_addresses, numero_processo)
                             elif modelo == "Modelo 2":
-                                _gerar_modelo_2(doc, info, addresses, numero_processo)
-                                tipo_documento = 2
+                                _gerar_modelo_2(doc, info, edited_addresses, numero_processo)
                             elif modelo == "Modelo 3":
-                                _gerar_modelo_3(doc, info, addresses, numero_processo)
-                                tipo_documento = 3
+                                _gerar_modelo_3(doc, info, edited_addresses, numero_processo)
 
-                            output_dir = tempfile.mkdtemp(prefix="output_")
-                            output_path = os.path.join(output_dir, f"Notificacao_Processo_Nº_{numero_processo}_modelo_{tipo_documento}.docx")
-                            doc.save(output_path)
-                            st.success(f"Documento gerado com sucesso.")
+                            # Salvar documento em buffer
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
 
-                            # Fornecer link de download
-                            with open(output_path, "rb") as file:
-                                st.download_button(
-                                    label="Baixar Documento",
-                                    data=file,
-                                    file_name=os.path.basename(output_path),
-                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                )
+                            # Nome do arquivo
+                            output_filename = f"Notificacao_Processo_Nº_{numero_processo}_modelo_{modelo.split()[-1]}.docx"
+
+                            st.download_button(
+                                label="Baixar Documento",
+                                data=buffer,
+                                file_name=output_filename,
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                            st.success("Documento gerado e pronto para download!")
 
                     else:
-                        st.error("Não foi possível extrair texto do arquivo.")
-
-                except Exception as e:
-                    st.error(f"Ocorreu um erro: {e}")
-
-    st.header("Gerar Documento a Partir do PDF")
-
-    if st.button("Processar Último PDF Baixado"):
-        with st.spinner("Processando o último PDF baixado..."):
-            try:
-                latest_file = get_latest_downloaded_file(download_directory)
-
-                if latest_file:
-                    st.write(f"Último arquivo encontrado: {os.path.basename(latest_file)}")
-                    try:
-                        numero_processo = extract_process_number(os.path.basename(latest_file))
-                        text = extract_text_with_pypdf2(latest_file)
-
-                        if text:
-                            st.success(f"Texto extraído com sucesso! Número do processo: {numero_processo}")
-                            info = extract_information_spacy(text)
-                            addresses = extract_addresses_spacy(text)
-
-                            # Permitir ao usuário editar os endereços
-                            addresses = escolher_enderecos(addresses)
-
-                            # Escolher o modelo do documento
-                            modelo = st.selectbox("Escolha o modelo do documento:", ["Modelo 1", "Modelo 2", "Modelo 3"])
-
-                            if st.button("Gerar Documento"):
-                                doc = Document()
-                                if modelo == "Modelo 1":
-                                    _gerar_modelo_1(doc, info, addresses, numero_processo)
-                                    tipo_documento = 1
-                                elif modelo == "Modelo 2":
-                                    _gerar_modelo_2(doc, info, addresses, numero_processo)
-                                    tipo_documento = 2
-                                elif modelo == "Modelo 3":
-                                    _gerar_modelo_3(doc, info, addresses, numero_processo)
-                                    tipo_documento = 3
-
-                                output_dir = tempfile.mkdtemp(prefix="output_")
-                                output_path = os.path.join(output_dir, f"Notificacao_Processo_Nº_{numero_processo}_modelo_{tipo_documento}.docx")
-                                doc.save(output_path)
-                                st.success(f"Documento gerado com sucesso.")
-
-                                # Fornecer link de download
-                                with open(output_path, "rb") as file:
-                                    st.download_button(
-                                        label="Baixar Documento",
-                                        data=file,
-                                        file_name=os.path.basename(output_path),
-                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                    )
-                        else:
-                            st.error("Não foi possível extrair texto do arquivo.")
-                    except Exception as e:
-                        st.error(f"Ocorreu um erro: {e}")
+                        st.error("Não foi possível extrair texto do arquivo PDF.")
                 else:
-                    st.warning("Nenhum arquivo encontrado no diretório de downloads.")
-            except Exception as e:
-                st.error(f"Ocorreu um erro: {e}")
+                    st.error("Nenhum arquivo PDF encontrado no diretório de downloads.")
+            except Exception as ex:
+                st.error(f"Ocorreu um erro: {ex}")
 
 if __name__ == '__main__':
+    # Carregar o modelo spaCy para português
+    try:
+        nlp = spacy.load("pt_core_news_lg")
+    except OSError:
+        st.info("Modelo 'pt_core_news_lg' não encontrado. Instalando...")
+        os.system("python -m spacy download pt_core_news_lg")
+        nlp = spacy.load("pt_core_news_lg")
+
     main()
