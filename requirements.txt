@@ -1,8 +1,7 @@
 streamlit
-webdriver-manager
-PyPDF2
-python-docx
+playwright
 nest_asyncio
+pypdf2
+python-docx
 spacy
-pt-core-news-sm==3.8.0
-selenium
+pt-core-news-lg @ https://github.com/explosion/spacy-models/releases/download/pt_core_news_lg-3.5.0/pt_core_news_lg-3.5.0.tar.gz
