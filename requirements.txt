@@ -7,5 +7,5 @@ pdf2image
 pytesseract
 Pillow
 spacy==3.6.1
-pt-core-news-lg @ https://github.com/explosion/spacy-models/releases/download/pt_core_news_lg-3.6.0/pt_core_news_lg-3.6.0-py3-none-any.whl
+pt-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/pt_core_news_lg-3.6.0/pt_core_news_sm-3.6.0-py3-none-any.whl
 thinc
