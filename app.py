@@ -13,51 +13,93 @@ from docx import Document
 from docx.shared import Pt
 from io import BytesIO
 
-# Importações adicionais para OCR
+# Bibliotecas para OCR e imagem
 from pdf2image import convert_from_path
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 
-# Configuração básica de logs para capturar erros e avisos
+# Criptografia de dados (exemplo simples)
+from cryptography.fernet import Fernet
+
+# Configuração básica de logs
 logging.basicConfig(level=logging.ERROR)
 
 # Configurar o caminho do Tesseract (ajuste conforme necessário)
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Para Windows
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 # pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'  # Para Linux
 
-# Configurar a política de loop de eventos para Windows, se aplicável
+# Ajuste para Windows no loop de eventos assíncronos
 if os.name == 'nt':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-# Constante para a URL de login do sistema SEI-Anvisa
 LOGIN_URL = "https://sei.anvisa.gov.br/sip/login.php?sigla_orgao_sistema=ANVISA&sigla_sistema=SEI"
 
-def create_browser_context():
-    """
-    Configura e retorna uma instância do Playwright BrowserContext e Page,
-    utilizando um diretório de dados de usuário persistente para manter a sessão.
-    """
+###############################################################################
+# Criptografia básica (chave em memória)
+###############################################################################
+secret_key = Fernet.generate_key()
+cipher_suite = Fernet(secret_key)
+
+###############################################################################
+# Funções de Validação de CPF e CNPJ
+###############################################################################
+def validar_cpf(cpf: str) -> bool:
+    cpf = re.sub(r"\D", "", cpf)
+    if len(cpf) != 11:
+        return False
+    if cpf in [str(i)*11 for i in range(10)]:
+        return False
+    for i in range(9, 11):
+        soma = 0
+        for j in range(0, i):
+            soma += int(cpf[j]) * ((i+1) - j)
+        resto = (soma * 10) % 11
+        resto = 0 if resto == 10 else resto
+        if resto != int(cpf[i]):
+            return False
+    return True
+
+def validar_cnpj(cnpj: str) -> bool:
+    cnpj = re.sub(r"\D", "", cnpj)
+    if len(cnpj) != 14:
+        return False
+    if cnpj in [str(i)*14 for i in range(10)]:
+        return False
+    
+    def calc_dv(cnpj_parcial):
+        peso = [6,7,8,9,2,3,4,5]
+        soma = 0
+        for i, digit in enumerate(cnpj_parcial[::-1]):
+            soma += int(digit) * peso[i % len(peso)]
+        resto = soma % 11
+        return '0' if resto < 2 else str(11 - resto)
+    
+    dv1 = calc_dv(cnpj[:-2])
+    dv2 = calc_dv(cnpj[:-2] + dv1)
+    return (dv1 == cnpj[-2]) and (dv2 == cnpj[-1])
+
+###############################################################################
+# Funções relacionadas ao Playwright
+###############################################################################
+def create_browser_context(headless=True):
     download_dir = os.path.join(os.getcwd(), "downloads")
     os.makedirs(download_dir, exist_ok=True)
-
-    # Diretório para armazenar dados de usuário persistentes
+    
     user_data_dir = os.path.join(os.getcwd(), "user_data")
     os.makedirs(user_data_dir, exist_ok=True)
-
+    
     playwright = sync_playwright().start()
+    
     context = playwright.chromium.launch_persistent_context(
         user_data_dir=user_data_dir,
-        headless=False,  # Executa o navegador de forma visível
-        accept_downloads=True,  # Permite downloads automáticos
-        downloads_path=download_dir  # Define o diretório de downloads
+        headless=headless,
+        accept_downloads=True,
+        downloads_path=download_dir
     )
     page = context.new_page()
     return playwright, context, page
 
 def wait_for_element(page, selector, timeout=20000):
-    """
-    Aguarda até que um elemento esteja presente no DOM.
-    """
     try:
         element = page.wait_for_selector(selector, timeout=timeout)
         if element:
@@ -68,9 +110,6 @@ def wait_for_element(page, selector, timeout=20000):
     return None
 
 def handle_download(download, download_dir):
-    """
-    Manipula o download, salvando-o no diretório de downloads especificado.
-    """
     os.makedirs(download_dir, exist_ok=True)
     download_path = os.path.join(download_dir, download.suggested_filename)
     download.save_as(download_path)
@@ -78,9 +117,6 @@ def handle_download(download, download_dir):
     return download_path
 
 def handle_alert(page):
-    """
-    Captura e trata alertas inesperados sem recarregar a página.
-    """
     try:
         dialog = page.expect_event("dialog", timeout=5000)
         if dialog:
@@ -89,156 +125,111 @@ def handle_alert(page):
             dialog.accept()
             return alert_text
     except PlaywrightTimeoutError:
-        # Nenhum alerta encontrado dentro do tempo limite
         return None
 
-def login(page, username, password):
-    """
-    Realiza o login no sistema SEI-Anvisa.
-    """
-    logging.info("Acessando a página de login.")
+def login(page, username_encrypted, password_encrypted):
+    username = cipher_suite.decrypt(username_encrypted).decode('utf-8')
+    password = cipher_suite.decrypt(password_encrypted).decode('utf-8')
+    
     page.goto(LOGIN_URL)
-
-    # Preenche o campo de usuário
+    
     user_field = wait_for_element(page, "#txtUsuario")
     if user_field:
         user_field.fill(username)
     else:
         raise Exception("Campo de usuário não encontrado.")
-
-    # Preenche o campo de senha
+    
     password_field = wait_for_element(page, "#pwdSenha")
     if password_field:
         password_field.fill(password)
     else:
         raise Exception("Campo de senha não encontrado.")
-
-    # Clica no botão de login
+    
     login_button = wait_for_element(page, "#sbmAcessar")
     if login_button:
         login_button.click()
     else:
         raise Exception("Botão de login não encontrado.")
-
-    # Aguarda a página principal carregar após login
+    
     try:
-        page.wait_for_load_state("networkidle", timeout=20000)  # Aguarda até que a rede esteja ociosa
+        page.wait_for_load_state("networkidle", timeout=20000)
     except PlaywrightTimeoutError:
         raise Exception("Login pode não ter sido realizado com sucesso.")
 
 def access_process(page, process_number):
-    """
-    Acessa um processo pelo número no sistema SEI-Anvisa.
-    """
     try:
-        # Preenche o número do processo na pesquisa rápida
         search_field = wait_for_element(page, "#txtPesquisaRapida", timeout=40000)
         search_field.fill(process_number)
         search_field.press("Enter")
-        time.sleep(5)  # Aguarda a pesquisa concluir
+        time.sleep(5)
     except Exception as e:
         raise Exception(f"Erro ao acessar o processo: {e}")
 
-# Identificadores e XPaths para interagir com elementos específicos na página
 IFRAME_VISUALIZACAO_ID = "ifrVisualizacao"
-BUTTON_XPATH_GERAR_PDF = '//*[@id="divArvoreAcoes"]/a[7]/img'  # XPath para o botão 'Gerar PDF'
-BUTTON_XPATH_DOWNLOAD_OPTION = '//*[@id="divInfraBarraComandosSuperior"]/button[1]'  # XPath para a opção de download
+BUTTON_XPATH_GERAR_PDF = '//*[@id="divArvoreAcoes"]/a[7]/img'
+BUTTON_XPATH_DOWNLOAD_OPTION = '//*[@id="divInfraBarraComandosSuperior"]/button[1]'
 
 def generate_and_download_pdf(page, download_dir):
-    """
-    Gera e baixa o PDF do processo no iframe correspondente.
-    
-    :param page: Instância do Playwright Page.
-    :param download_dir: Diretório para salvar o download.
-    :return: Caminho do arquivo PDF baixado.
-    """
     try:
-        # Localiza o iframe de visualização
         iframe_element = page.wait_for_selector(f'iframe#{IFRAME_VISUALIZACAO_ID}', timeout=10000)
         if not iframe_element:
             raise Exception(f"Iframe com ID {IFRAME_VISUALIZACAO_ID} não encontrado.")
-
-        # Acessa o conteúdo do iframe
+        
         iframe = iframe_element.content_frame()
         if not iframe:
             raise Exception("Não foi possível acessar o conteúdo do iframe.")
-
-        # Localiza e clica no botão de gerar PDF dentro do iframe
+        
         gerar_pdf_button = iframe.wait_for_selector(f'xpath={BUTTON_XPATH_GERAR_PDF}', timeout=10000)
         if not gerar_pdf_button:
             raise Exception("Botão para gerar PDF não encontrado.")
-
         gerar_pdf_button.click()
-        time.sleep(2)  # Aguarda as opções de download aparecerem
-
-        # Localiza e clica na opção de download dentro do iframe
+        time.sleep(2)
+        
         download_option_button = iframe.wait_for_selector(f'xpath={BUTTON_XPATH_DOWNLOAD_OPTION}', timeout=10000)
         if not download_option_button:
             raise Exception("Botão de opção de download não encontrado.")
-
+        
         with page.expect_download(timeout=60000) as download_info_option:
             download_option_button.click()
         download_option = download_info_option.value
         download_option_path = handle_download(download_option, download_dir)
-
+        
         return download_option_path
-
-    except PlaywrightTimeoutError as e:
+    
+    except PlaywrightTimeoutError:
         raise Exception("Timeout ao gerar o PDF do processo.")
     except Exception as e:
         raise Exception(f"Erro ao gerar o PDF do processo: {e}")
     finally:
-        time.sleep(5)  # Aguarda para garantir que o download seja concluído
+        time.sleep(5)
 
-def process_notification(username, password, process_number):
-    """
-    Orquestra o processo de login, acesso ao processo e geração/baixa do PDF.
-    
-    :param username: Nome de usuário para login.
-    :param password: Senha para login.
-    :param process_number: Número do processo a ser acessado.
-    :return: Caminho do PDF baixado.
-    """
-    playwright, context, page = create_browser_context()
+def process_notification(username_encrypted, password_encrypted, process_number, headless=True):
     download_dir = os.path.join(os.getcwd(), "downloads")
+    playwright, context, page = create_browser_context(headless=headless)
+    
     try:
-        # Passo 1: Login no sistema
-        login(page, username, password)
-
-        # Passo 2: Acessa o processo específico
+        login(page, username_encrypted, password_encrypted)
         access_process(page, process_number)
-
-        # Passo 3: Gera e baixa o PDF do processo
         download_path = generate_and_download_pdf(page, download_dir)
-        return download_path  # Retorna o caminho do PDF baixado
+        return download_path
     except Exception as e:
         logging.error(f"Erro durante o processamento: {e}")
         raise e
     finally:
-        # Fecha o navegador e para o Playwright
         context.close()
         playwright.stop()
 
+###############################################################################
+# Extração de texto e OCR (atualizado)
+###############################################################################
 def normalize_text(text):
-    """
-    Normaliza o texto removendo acentuação e espaços extras.
-    
-    :param text: Texto a ser normalizado.
-    :return: Texto normalizado.
-    """
     if not isinstance(text, str):
         return text
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    text = re.sub(r"\s{2,}", " ", text)  # Remove múltiplos espaços
+    text = re.sub(r"\s{2,}", " ", text)
     return text.strip()
 
 def corrigir_texto(texto):
-    """
-    Corrige caracteres especiais comuns encontrados no texto extraído.
-    
-    :param texto: Texto a ser corrigido.
-    :return: Texto corrigido.
-    """
     substituicoes = {
         'Ã©': 'é',
         'Ã§Ã£o': 'ção',
@@ -256,102 +247,16 @@ def corrigir_texto(texto):
         'Ã­': 'í',
         'Ã´': 'ô',
         'Ã§': 'ç',
-        # Adicione mais substituições conforme necessário
     }
     for errado, correto in substituicoes.items():
         texto = texto.replace(errado, correto)
     return texto
 
-def extract_information_spacy(text):
-    """
-    Extrai informações do texto utilizando spaCy.
-    
-    :param text: Texto extraído do PDF.
-    :return: Dicionário com informações extraídas.
-    """
-    doc = nlp(text)
-
-    info = {
-        "nome_autuado": None,
-        "cpf": None,
-        "cnpj": None,
-        "socios_advogados": [],
-        "emails": [],
-    }
-
-    for ent in doc.ents:
-        if ent.label_ in ["PER", "ORG"]:  # Entidades de Pessoa ou Organização
-            if not info["nome_autuado"]:
-                info["nome_autuado"] = ent.text.strip()
-        elif ent.label_ == "EMAIL":
-            info["emails"].append(ent.text.strip())
-
-    # Padrões regex para CNPJ e CPF
-    cnpj_pattern = r"CNPJ:\s*([\d./-]{18})"
-    cpf_pattern = r"CPF:\s*([\d./-]{14})"
-
-    cnpj_match = re.search(cnpj_pattern, text)
-    cpf_match = re.search(cpf_pattern, text)
-
-    if cnpj_match:
-        cnpj = cnpj_match.group(1)
-        info["cnpj"] = format_cnpj(cnpj)
-    if cpf_match:
-        cpf = cpf_match.group(1)
-        info["cpf"] = format_cpf(cpf)
-
-    # Padrão regex para sócios ou advogados
-    socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
-    info["socios_advogados"] = re.findall(socios_adv_pattern, text) or []
-
-    return info
-
-def format_cnpj(cnpj):
-    """
-    Formata o CNPJ no padrão XX.XXX.XXX/XXXX-XX
-    
-    :param cnpj: CNPJ sem formatação.
-    :return: CNPJ formatado.
-    """
-    digits = re.sub(r'\D', '', cnpj)
-    if len(digits) != 14:
-        return cnpj  # Retorna como está se não tiver 14 dígitos
-    return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}"
-
-def format_cpf(cpf):
-    """
-    Formata o CPF no padrão XXX.XXX.XXX-XX
-    
-    :param cpf: CPF sem formatação.
-    :return: CPF formatado.
-    """
-    digits = re.sub(r'\D', '', cpf)
-    if len(digits) != 11:
-        return cpf  # Retorna como está se não tiver 11 dígitos
-    return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:11]}"
-
-def extract_process_number(file_name):
-    """
-    Extrai e formata o número do processo a partir do nome do arquivo PDF.
-    
-    :param file_name: Nome do arquivo PDF.
-    :return: Número do processo formatado.
-    """
-    base_name = os.path.splitext(file_name)[0]
-    if base_name.startswith("SEI"):
-        base_name = base_name[3:].strip()
-    # Formatar no padrão XXXXX.XXXXXX/XXXX-XX
-    digits = re.sub(r'\D', '', base_name)
-    if len(digits) != 15:
-        return base_name  # Retorna como está se não tiver 15 dígitos
-    return f"{digits[:5]}.{digits[5:11]}/{digits[11:15]}-{digits[15-1:]}"
-
 def extract_text_with_pypdf2(pdf_path):
     """
-    Extrai texto de um PDF usando PyPDF2. Se não encontrar texto, tenta usar OCR.
-    
-    :param pdf_path: Caminho do arquivo PDF.
-    :return: Texto extraído.
+    Primeiro tenta extrair texto via PyPDF2, sem OCR.
+    Se der certo, retorna o texto.
+    Caso não encontre nada, retorna string vazia.
     """
     try:
         reader = PdfReader(pdf_path)
@@ -360,148 +265,266 @@ def extract_text_with_pypdf2(pdf_path):
             page_text = page.extract_text()
             if page_text:
                 text += page_text
-
-        if text.strip():
-            text = corrigir_texto(normalize_text(text))
-            return text.strip()
-        else:
-            # Usa OCR se nenhum texto foi encontrado
-            return extract_text_with_ocr(pdf_path)
-    except Exception as e:
-        st.error(f"Erro ao processar PDF {pdf_path}: {e}")
-        return ''
-
-def extract_text_with_ocr(pdf_path):
-    """
-    Extrai texto de um PDF baseado em imagem usando OCR.
-    
-    :param pdf_path: Caminho do arquivo PDF.
-    :return: Texto extraído via OCR.
-    """
-    try:
-        # Converter PDF para imagens com maior DPI para melhor qualidade
-        pages = convert_from_path(pdf_path, dpi=300, fmt='jpeg')  # Usando JPEG para melhor compressão
-
-        text = ""
-        for page_number, page in enumerate(pages, start=1):
-            # Pré-processamento da imagem para melhorar a precisão do OCR
-            gray = page.convert('L')  # Converter para escala de cinza
-            enhancer = ImageEnhance.Contrast(gray)
-            gray = enhancer.enhance(2.0)
-            threshold = gray.point(lambda x: 0 if x < 128 else 255, '1')  # Aplicar threshold binário
-            threshold = threshold.filter(ImageFilter.MedianFilter())
-
-            custom_config = r'--oem 3 --psm 6'  # Configurações do Tesseract
-            page_text = pytesseract.image_to_string(threshold, lang='por', config=custom_config)
-            text += page_text + "\n"
-
+        
         if text.strip():
             text = corrigir_texto(normalize_text(text))
             return text.strip()
         else:
             return ''
-    except Exception as e:
-        st.error(f"Erro durante o OCR do PDF {pdf_path}: {e}")
+    except:
         return ''
 
-def extract_addresses_spacy(text):
+def extract_text_with_context(image_path, file_origin, lang='por'):
     """
-    Extrai endereços do texto utilizando spaCy e complementa com regex, garantindo a unicidade e completude.
+    Extrai texto de uma imagem com Tesseract e localiza endereços básicos via regex.
+    - Filtra endereços com menos de 15 caracteres (campo 'endereco').
+    - Adiciona 'file_origin' em cada endereço apenas como referência/visão do usuário.
+    """
+    try:
+        custom_config = f"--psm 6 --oem 3 -l {lang}"
+        image = Image.open(image_path)
+        text_page = pytesseract.image_to_string(image, config=custom_config)
+
+        text_page = corrigir_texto(normalize_text(text_page))
+
+        # Regex simples para capturar Endereco, Cidade, Bairro, Estado e CEP
+        endereco_pattern = r"Endere[c|ç]o[:\s]+([\w\s.,/\-ºª]+)"
+        cidade_pattern   = r"Cidade[:\s]+([\w\s]+)"
+        bairro_pattern   = r"Bairro[:\s]+([\w\s]+)"
+        estado_pattern   = r"Estado[:\s]+([A-Z]{2})"
+        cep_pattern      = r"CEP[:\s]+([\d.\-]+)"
+
+        enderecos_encontrados = []
+
+        end_matches = re.findall(endereco_pattern, text_page, flags=re.IGNORECASE)
+        cid_matches = re.findall(cidade_pattern, text_page, flags=re.IGNORECASE)
+        bai_matches = re.findall(bairro_pattern, text_page, flags=re.IGNORECASE)
+        uf_matches  = re.findall(estado_pattern, text_page, flags=re.IGNORECASE)
+        cep_matches = re.findall(cep_pattern, text_page, flags=re.IGNORECASE)
+
+        max_len = max(len(end_matches), len(cid_matches), len(bai_matches), len(uf_matches), len(cep_matches))
+
+        for i in range(max_len):
+            endereco_val = end_matches[i] if i < len(end_matches) else "[Não informado]"
+            cidade_val   = cid_matches[i] if i < len(cid_matches) else "[Não informado]"
+            bairro_val   = bai_matches[i] if i < len(bai_matches) else "[Não informado]"
+            estado_val   = uf_matches[i]  if i < len(uf_matches)  else "[Não informado]"
+            cep_val      = cep_matches[i] if i < len(cep_matches) else "[Não informado]"
+
+            # Excluir endereços com menos de 15 caracteres
+            if len(endereco_val.strip()) < 15:
+                continue
+
+            enderecos_encontrados.append({
+                "endereco": endereco_val,
+                "cidade": cidade_val,
+                "bairro": bairro_val,
+                "estado": estado_val,
+                "cep": cep_val,
+                "source": file_origin  # apenas exibição em tela
+            })
+
+        return text_page, enderecos_encontrados
+
+    except Exception as e:
+        logging.error(f"Erro ao processar a imagem {image_path}: {e}")
+        return "", []
+
+def ocr_extract(pdf_path, psm_mode=6, oem_mode=3):
+    """
+    Extrai texto via OCR de cada página do PDF (convertida em imagem).
+    Retorna todo o texto concatenado e também uma lista de endereços
+    encontrados por regex, com respectivo 'source'.
+    """
+    text_total = ""
+    enderecos_totais = []
+
+    try:
+        pages = convert_from_path(pdf_path, dpi=300, fmt='jpeg')
+
+        for idx, page in enumerate(pages, start=1):
+            gray = page.convert('L')
+            enhancer = ImageEnhance.Contrast(gray)
+            gray = enhancer.enhance(2.0)
+            threshold = gray.point(lambda x: 0 if x < 128 else 255, '1')
+            threshold = threshold.filter(ImageFilter.MedianFilter())
+
+            temp_filename = f"temp_page_{idx}.jpg"
+            threshold.save(temp_filename, "JPEG")
+
+            file_origin = f"{os.path.basename(pdf_path)} - Página {idx}"
+            text_page, enderecos_page = extract_text_with_context(temp_filename, file_origin, lang='por')
+
+            text_total += text_page + "\n"
+            enderecos_totais.extend(enderecos_page)
+
+            if os.path.exists(temp_filename):
+                os.remove(temp_filename)
+
+    except Exception as e:
+        st.error(f"Erro durante o OCR: {e}")
+
+    text_total = corrigir_texto(normalize_text(text_total))
+    return text_total, enderecos_totais
+
+def extract_text_with_best_ocr(pdf_path):
+    """
+    Tenta extrair texto sem OCR (PyPDF2).
+    Se não conseguir, faz OCR em cada página.
+    Retorna o texto final e a lista de endereços extraídos (com .source).
+    """
+    extracted_text = extract_text_with_pypdf2(pdf_path)
+    if extracted_text.strip():
+        # Se extraiu com PyPDF2, não faz OCR
+        return extracted_text, []
     
-    :param text: Texto extraído do PDF.
-    :return: Lista de dicionários com informações de endereços.
+    # Caso contrário, faz OCR
+    text_ocr, enderecos_ocr = ocr_extract(pdf_path, psm_mode=6, oem_mode=3)
+    if len(text_ocr) > 0:
+        return text_ocr, enderecos_ocr
+
+    return "", []
+
+###############################################################################
+# Formatação e extração de dados
+###############################################################################
+def format_cnpj(cnpj):
+    digits = re.sub(r'\D', '', cnpj)
+    if len(digits) != 14:
+        return cnpj
+    return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}"
+
+def format_cpf(cpf):
+    digits = re.sub(r'\D', '', cpf)
+    if len(digits) != 11:
+        return cpf
+    return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:11]}"
+
+def extract_process_number(file_name):
+    base_name = os.path.splitext(file_name)[0]
+    if base_name.startswith("SEI"):
+        base_name = base_name[3:].strip()
+    
+    digits = re.sub(r'\D', '', base_name)
+    if len(digits) != 15:
+        return base_name
+    return f"{digits[:5]}.{digits[5:11]}/{digits[11:15]}-{digits[14:]}"
+
+def extract_information_spacy(text):
+    """
+    Exemplo de extração com spacy (nomes, e-mails, etc.).
     """
     doc = nlp(text)
+    info = {
+        "nome_autuado": None,
+        "cpf": None,
+        "cnpj": None,
+        "socios_advogados": [],
+        "emails": [],
+    }
+    
+    for ent in doc.ents:
+        if ent.label_ in ["PER", "ORG"]:
+            if not info["nome_autuado"]:
+                info["nome_autuado"] = ent.text.strip()
+        elif ent.label_ == "EMAIL":
+            info["emails"].append(ent.text.strip())
+    
+    # Regex para CNPJ/CPF
+    cnpj_pattern = r"CNPJ:\s*([\d./-]{14,18})"
+    cpf_pattern  = r"CPF:\s*([\d./-]{11,14})"
 
+    cnpj_match = re.search(cnpj_pattern, text)
+    cpf_match  = re.search(cpf_pattern, text)
+    
+    if cnpj_match:
+        cnpj_puro = re.sub(r'\D', '', cnpj_match.group(1))
+        if validar_cnpj(cnpj_puro):
+            info["cnpj"] = format_cnpj(cnpj_match.group(1))
+    
+    if cpf_match:
+        cpf_puro = re.sub(r'\D', '', cpf_match.group(1))
+        if validar_cpf(cpf_puro):
+            info["cpf"] = format_cpf(cpf_match.group(1))
+    
+    # Sócios / advogados
+    socios_adv_pattern = r"(?:Sócio|Advogado|Responsável|Representante Legal):\s*([\w\s]+)"
+    info["socios_advogados"] = re.findall(socios_adv_pattern, text) or []
+    
+    return info
+
+def extract_addresses_with_source(text):
+    """
+    Exemplo: extrai endereços com a 'source' baseada em 'AR' ou 'AIS' no texto.
+    + Filtrar endereços < 15 caracteres.
+    """
+    doc = nlp(text)
+    page_blocks = text.split("\f")
+    
     addresses = []
-    seen_addresses = {}
-
-    # Padrões regex específicos para endereços
+    
     endereco_pattern = r"(?:Endereço|End|Endereco):\s*([\w\s.,ºª-]+)"
-    cidade_pattern = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
-    bairro_pattern = r"Bairro:\s*([\w\s]+)"
-    estado_pattern = r"Estado:\s*([A-Z]{2})"
-    cep_pattern = r"CEP:\s*(\d{2}\.\d{3}-\d{3}|\d{5}-\d{3})"
-
-    endereco_matches = re.findall(endereco_pattern, text)
-    cidade_matches = re.findall(cidade_pattern, text)
-    bairro_matches = re.findall(bairro_pattern, text)
-    estado_matches = re.findall(estado_pattern, text)
-    cep_matches = re.findall(cep_pattern, text)
-
-    max_len = max(len(endereco_matches), len(cidade_matches), len(bairro_matches), len(estado_matches), len(cep_matches))
-
-    for i in range(max_len):
-        endereco = endereco_matches[i].strip() if i < len(endereco_matches) else "[Não informado]"
-        cidade = cidade_matches[i].strip() if i < len(cidade_matches) else "[Não informado]"
-        bairro = bairro_matches[i].strip() if i < len(bairro_matches) else "[Não informado]"
-        estado = estado_matches[i].strip() if i < len(estado_matches) else "[Não informado]"
-        cep = cep_matches[i].strip() if i < len(cep_matches) else "[Não informado]"
-
-        # Verificar se 'Endereço' e 'CEP' não estão vazios ou com placeholders
-        if (endereco and endereco != "[Não informado]") and (cep and cep != "[Não informado]"):
-            # Normalizar o endereço para deduplicação
-            normalized_endereco = normalize_address(endereco)
-
-            # Só se adiciona se o endereço for mais completo
-            if normalized_endereco in seen_addresses:
-                existing = seen_addresses[normalized_endereco]
-                # Seleciona o endereço com mais caracteres
-                if len(endereco) > len(existing["endereco"]):
-                    seen_addresses[normalized_endereco]["endereco"] = endereco
-
-                # Preenche os campos restantes se estiverem faltando
-                if existing["cidade"] == "[Não informado]" and cidade != "[Não informado]":
-                    seen_addresses[normalized_endereco]["cidade"] = cidade
-                if existing["bairro"] == "[Não informado]" and bairro != "[Não informado]":
-                    seen_addresses[normalized_endereco]["bairro"] = bairro
-                if existing["estado"] == "[Não informado]" and estado != "[Não informado]":
-                    seen_addresses[normalized_endereco]["estado"] = estado
-                if existing["cep"] == "[Não informado]" and cep != "[Não informado]":
-                    seen_addresses[normalized_endereco]["cep"] = cep
-            else:
-                seen_addresses[normalized_endereco] = {
-                    "endereco": endereco,
-                    "cidade": cidade,
-                    "bairro": bairro,
-                    "estado": estado,
-                    "cep": cep
-                }
-
-    # Converter o dicionário para uma lista de endereços
-    for addr in seen_addresses.values():
-        addresses.append({
-            "endereco": addr["endereco"],
-            "cidade": addr["cidade"],
-            "bairro": addr["bairro"],
-            "estado": addr["estado"],
-            "cep": addr["cep"]
-        })
-
+    cidade_pattern   = r"Cidade:\s*([\w\s]+(?: DE [\w\s]+)?)"
+    bairro_pattern   = r"Bairro:\s*([\w\s]+)"
+    estado_pattern   = r"Estado:\s*([A-Z]{2})"
+    cep_pattern      = r"CEP:\s*(\d{2}\.\d{3}-\d{3}|\d{5}-\d{3})"
+    
+    for block in page_blocks:
+        block_clean = block.strip()
+        block_source = "Desconhecido"
+        if re.search(r"\bAR\b", block_clean, re.IGNORECASE):
+            block_source = "AR"
+        elif re.search(r"\bAIS\b", block_clean, re.IGNORECASE):
+            block_source = "AIS"
+        
+        endereco_matches = re.findall(endereco_pattern, block_clean, re.IGNORECASE)
+        cidade_matches   = re.findall(cidade_pattern, block_clean, re.IGNORECASE)
+        bairro_matches   = re.findall(bairro_pattern, block_clean, re.IGNORECASE)
+        estado_matches   = re.findall(estado_pattern, block_clean, re.IGNORECASE)
+        cep_matches      = re.findall(cep_pattern, block_clean, re.IGNORECASE)
+        
+        max_len = max(
+            len(endereco_matches),
+            len(cidade_matches),
+            len(bairro_matches),
+            len(estado_matches),
+            len(cep_matches)
+        )
+        
+        for i in range(max_len):
+            end_str = endereco_matches[i].strip() if i < len(endereco_matches) else "[Não informado]"
+            cid_str = cidade_matches[i].strip()   if i < len(cidade_matches)   else "[Não informado]"
+            bai_str = bairro_matches[i].strip()   if i < len(bairro_matches)   else "[Não informado]"
+            uf_str  = estado_matches[i].strip()   if i < len(estado_matches)   else "[Não informado]"
+            cep_str = cep_matches[i].strip()      if i < len(cep_matches)      else "[Não informado]"
+            
+            if len(end_str) < 15:
+                continue
+            
+            addresses.append({
+                "endereco": end_str,
+                "cidade": cid_str,
+                "bairro": bai_str,
+                "estado": uf_str,
+                "cep": cep_str,
+                "source": block_source
+            })
+    
     return addresses
 
 def normalize_address(address):
-    """
-    Normaliza o endereço removendo pontuação, convertendo para minúsculas e removendo espaços extras.
-    
-    :param address: Endereço a ser normalizado.
-    :return: Endereço normalizado.
-    """
     address = unicodedata.normalize('NFKD', address).encode('ASCII', 'ignore').decode('utf-8')
-    address = re.sub(r'[^\w\s]', '', address)  # Remove pontuação
-    address = re.sub(r'\s+', ' ', address)  # Remove múltiplos espaços
+    address = re.sub(r'[^\w\s]', '', address)
+    address = re.sub(r'\s+', ' ', address)
     return address.lower().strip()
 
+def extract_all_emails(emails):
+    return list(set(emails))
+
+###############################################################################
+# Modelos Word
+###############################################################################
 def adicionar_paragrafo(doc, texto="", negrito=False, tamanho=12):
-    """
-    Adiciona um parágrafo ao documento Word com formatação opcional.
-    
-    :param doc: Objeto Document do python-docx.
-    :param texto: Texto do parágrafo.
-    :param negrito: Booleano para definir se o texto deve ser negrito.
-    :param tamanho: Tamanho da fonte.
-    :return: Parágrafo adicionado.
-    """
     paragrafo = doc.add_paragraph()
     run = paragrafo.add_run(texto)
     run.bold = negrito
@@ -834,209 +857,251 @@ def _gerar_modelo_3(doc, info, enderecos, numero_processo, usuario_nome, usuario
     except Exception as e:
         st.error(f"Erro ao gerar o documento no modelo 3: {e}")
 
-def extract_all_emails(emails):
-    """
-    Remove duplicatas e retorna uma lista de emails únicos.
-    
-    :param emails: Lista de emails extraídos.
-    :return: Lista de emails únicos.
-    """
-    return list(set(emails))
-
+###############################################################################
+# Aplicação principal (Streamlit)
+###############################################################################
 def main():
-    """
-    Função principal que define a interface e a lógica do aplicativo Streamlit.
-    """
     st.title("Gerador de Notificações SEI-Anvisa")
 
-    # Seção de login na barra lateral
+    # Seção de login
     st.sidebar.header("Informações de Login")
-    username = st.sidebar.text_input("Usuário")
-    password = st.sidebar.text_input("Senha", type="password")
+    if "username_input" not in st.session_state:
+        st.session_state.username_input = ""
+    if "password_input" not in st.session_state:
+        st.session_state.password_input = ""
 
+    # Campos de login
+    st.session_state.username_input = st.sidebar.text_input("Usuário", value=st.session_state.username_input)
+    st.session_state.password_input = st.sidebar.text_input("Senha", type="password", value=st.session_state.password_input)
+
+    headless_option = st.sidebar.checkbox("Executar sem abrir o navegador (headless)?", value=True)
+    
     # Seção de entrada do número do processo
     st.header("Processo Administrativo")
-    process_number_input = st.text_input("Número do Processo")
+    if "process_number_input" not in st.session_state:
+        st.session_state.process_number_input = ""
 
-    # Botão para iniciar a geração da notificação
-    gerar_notificacao = st.button("Gerar Notificação")
+    st.session_state.process_number_input = st.text_input("Número do Processo", value=st.session_state.process_number_input)
 
-    if gerar_notificacao:
-        # Validação dos campos obrigatórios
-        if not username or not password or not process_number_input:
+    # Botão principal
+    if st.button("Gerar Notificação e Extrair Dados"):
+        if not st.session_state.username_input or not st.session_state.password_input or not st.session_state.process_number_input:
             st.error("Por favor, preencha todos os campos.")
         else:
             with st.spinner("Processando..."):
                 try:
-                    # Processa a notificação e obtém o caminho do PDF baixado
-                    download_path = process_notification(username, password, process_number_input)
-                    st.success("PDF gerado com sucesso!")
+                    username_encrypted = cipher_suite.encrypt(st.session_state.username_input.encode('utf-8'))
+                    password_encrypted = cipher_suite.encrypt(st.session_state.password_input.encode('utf-8'))
+
+                    download_path = process_notification(
+                        username_encrypted,
+                        password_encrypted,
+                        st.session_state.process_number_input,
+                        headless=headless_option
+                    )
+                    st.success("PDF gerado/baixado com sucesso!")
 
                     if download_path:
-                        # Extrair o nome do arquivo PDF
                         pdf_file_name = os.path.basename(download_path)
-                        st.info(f"Arquivo PDF baixado: {pdf_file_name}")
-
-                        # Extrair e formatar o número do processo
                         numero_processo = extract_process_number(pdf_file_name)
 
-                        # Extrair texto do PDF
-                        text = extract_text_with_pypdf2(download_path)
+                        text_final, enderecos_ocr = extract_text_with_best_ocr(download_path)
 
-                        if text:
+                        if text_final.strip():
                             st.success("Texto extraído com sucesso!")
-                            info = extract_information_spacy(text)
-                            addresses = extract_addresses_spacy(text)
+                            info = extract_information_spacy(text_final)
+                            addresses_ar_ais = extract_addresses_with_source(text_final)
+
+                            # Unir endereços OCR e AR/AIS
+                            all_addresses = addresses_ar_ais + enderecos_ocr
+
                             emails = extract_all_emails(info.get('emails', []))
 
-                            # Exibir informações extraídas
-                            st.subheader("Informações Extraídas")
-                            st.write(f"**Arquivo PDF:** {pdf_file_name}")
-                            st.write(f"**Nome Autuado:** {info.get('nome_autuado', 'Não informado')}")
-                            if info.get('cnpj'):
-                                st.write(f"**CNPJ:** {info.get('cnpj')}")
-                            elif info.get('cpf'):
-                                st.write(f"**CPF:** {info.get('cpf')}")
-                            st.write(f"**Emails:** {', '.join(emails) if emails else 'Não informado'}")
-                            st.write(f"**Sócios/Advogados:** {', '.join(info.get('socios_advogados', []))}")
-
-                            # Exibir endereços encontrados
-                            st.subheader("Endereços Encontrados")
-                            for idx, end in enumerate(addresses, start=1):
-                                st.write(f"**Endereço {idx}:**")
-                                st.write(f"  - Endereço: {end['endereco']}")
-                                st.write(f"  - Cidade: {end['cidade']}")
-                                st.write(f"  - Bairro: {end['bairro']}")
-                                st.write(f"  - Estado: {end['estado']}")
-                                st.write(f"  - CEP: {end['cep']}")
-
-                            # Permitir ao usuário editar os endereços extraídos
-                            st.subheader("Editar Endereços")
-                            edited_addresses = []
-                            for idx, end in enumerate(addresses, start=1):
-                                st.write(f"**Endereço {idx}:**")
-                                endereco = st.text_input(f"Endereço {idx}", value=end['endereco'])
-                                cidade = st.text_input(f"Cidade {idx}", value=end['cidade'])
-                                bairro = st.text_input(f"Bairro {idx}", value=end['bairro'])
-                                estado = st.text_input(f"Estado {idx}", value=end['estado'])
-                                cep = st.text_input(f"CEP {idx}", value=end['cep'])
-                                edited_addresses.append({
-                                    "endereco": endereco,
-                                    "cidade": cidade,
-                                    "bairro": bairro,
-                                    "estado": estado,
-                                    "cep": cep
-                                })
-
-                            # Permitir ao usuário selecionar qual email utilizar
-                            st.subheader("Selecionar Email para Utilizar no Processo")
-                            if emails:
-                                email_selecionado = st.selectbox("Selecione o email desejado:", emails)
-                            else:
-                                email_selecionado = "[Não informado]"
-
-                            # Armazenar informações no session_state para uso posterior
+                            # Guardar em session_state
                             st.session_state['info'] = info
-                            st.session_state['enderecos'] = edited_addresses
+                            st.session_state['addresses_raw'] = all_addresses
                             st.session_state['numero_processo'] = numero_processo
-                            st.session_state['pdf_file'] = pdf_file_name
-                            st.session_state['email_selecionado'] = email_selecionado
+                            st.session_state['emails'] = emails
 
                 except Exception as ex:
                     st.error(f"Ocorreu um erro: {ex}")
 
-    # Verificar se a notificação foi gerada e armazenada no session_state
-    if ('info' in st.session_state and 
-        'enderecos' in st.session_state and 
-        'numero_processo' in st.session_state and
-        'pdf_file' in st.session_state):
-        
-        # Seleção do modelo de documento
-        st.subheader("Escolha o Modelo do Documento")
-        modelo = st.selectbox("Selecione o modelo desejado:", [
-            "ID 3791 - Notificação de decisões em 1ª instância - SEI", 
-            "ID 2782 - Notificação de decisões revisadas/retratadas", 
-            "ID 2703 - Notificação de decisão da DICOL"
-        ])
+    # Só exibimos as informações extraídas se tivermos st.session_state populado
+    if 'info' in st.session_state and 'addresses_raw' in st.session_state:
+        st.subheader("Informações Extraídas")
+        info = st.session_state['info']
+        emails = st.session_state['emails']
+        numero_processo = st.session_state['numero_processo']
 
-        gerar_doc = st.button("Gerar Documento Word")
+        st.write(f"**Nome Autuado:** {info.get('nome_autuado', 'Não informado')}")
+        if info.get('cnpj'):
+            st.write(f"**CNPJ:** {info.get('cnpj')}")
+        elif info.get('cpf'):
+            st.write(f"**CPF:** {info.get('cpf')}")
+        else:
+            st.write("**CNPJ/CPF:** não encontrado ou inválido")
+        st.write(f"**Emails:** {', '.join(emails) if emails else 'Não informado'}")
+        st.write(f"**Sócios/Advogados:** {', '.join(info.get('socios_advogados', []))}")
 
-        if gerar_doc:
+        # Exibir endereços com a origem (não iremos mostrar no documento final, mas só para referência)
+        st.subheader("Endereços Encontrados")
+        if "addresses_edited" not in st.session_state:
+            st.session_state['addresses_edited'] = st.session_state['addresses_raw'][:]
+
+        # Permitir exclusão e edição de cada endereço
+        for idx, end in enumerate(st.session_state['addresses_edited']):
+            st.write(f"**Endereço {idx+1}**:")
+            new_endereco = st.text_input(f"Endereço {idx+1}", value=end['endereco'], key=f"end_{idx}")
+            new_cidade = st.text_input(f"Cidade {idx+1}", value=end['cidade'], key=f"cid_{idx}")
+            new_bairro = st.text_input(f"Bairro {idx+1}", value=end['bairro'], key=f"bai_{idx}")
+            new_estado = st.text_input(f"Estado {idx+1}", value=end['estado'], key=f"est_{idx}")
+            new_cep = st.text_input(f"CEP {idx+1}", value=end['cep'], key=f"cep_{idx}")
+            
+            # Checkbox para excluir o endereço
+            exclude_address = st.checkbox("Excluir este endereço?", key=f"excluir_{idx}", value=False)
+
+            # Exibe a origem do endereço
+            st.write(f"Origem do endereço: {end.get('source', 'Desconhecido')}")
+            st.write("---")
+
+            # Atualizar dicionário em session_state
+            st.session_state['addresses_edited'][idx]['endereco'] = new_endereco
+            st.session_state['addresses_edited'][idx]['cidade']   = new_cidade
+            st.session_state['addresses_edited'][idx]['bairro']   = new_bairro
+            st.session_state['addresses_edited'][idx]['estado']   = new_estado
+            st.session_state['addresses_edited'][idx]['cep']      = new_cep
+            st.session_state['addresses_edited'][idx]['excluded'] = exclude_address
+
+        # Selecionar email
+        st.subheader("Selecionar Email para Utilizar no Processo")
+        if len(emails) > 0:
+            if "selected_email" not in st.session_state:
+                st.session_state.selected_email = emails[0]
+            st.session_state.selected_email = st.selectbox("Selecione o email desejado:", emails, 
+                                                          index=emails.index(st.session_state.selected_email) 
+                                                          if st.session_state.selected_email in emails else 0)
+        else:
+            st.session_state.selected_email = "[Não informado]"
+            st.write("Nenhum email encontrado.")
+
+    # Segunda parte: geração de documentos
+    if (
+        'info' in st.session_state and 
+        'addresses_edited' in st.session_state and 
+        'numero_processo' in st.session_state
+    ):
+        st.subheader("Geração do Documento")
+        modelo = st.selectbox(
+            "Selecione o modelo desejado:",
+            [
+                "MODELO 1 - Notificação de decisões em 1ª instância",
+                "MODELO 2 - Notificação de decisões revisadas/retratadas",
+                "MODELO 3 - Notificação de decisão da DICOL"
+            ]
+        )
+
+        if st.button("Gerar Documento Word"):
             try:
-                # Cria um novo documento Word
                 doc = Document()
                 info = st.session_state['info']
-                edited_addresses = st.session_state['enderecos']
-                numero_processo = st.session_state['numero_processo']
-                pdf_file_name = st.session_state['pdf_file']
-                email_selecionado = st.session_state['email_selecionado']
 
-                # Solicita informações adicionais conforme o modelo selecionado
-                if modelo == "ID 3791 - Notificação de decisões em 1ª instância - SEI":
-                    _gerar_modelo_1(doc, info, edited_addresses, numero_processo, email_selecionado)
-                elif modelo == "ID 2782 - Notificação de decisões revisadas/retratadas":
-                    # Solicita motivo da revisão e datas relevantes
-                    motivo_revisao = st.selectbox("Motivo da Revisão:", ["insuficiencia_provas", "prescricao", "extincao_empresa", "outros"])
-                    data_decisao = st.date_input("Data da Decisão:")
-                    data_recebimento_notificacao = st.date_input("Data de Recebimento da Notificação:")
-                    
+                # Antes de gerar, vamos filtrar os endereços que foram marcados como excluídos
+                all_addresses = st.session_state['addresses_edited']
+                final_addresses = [a for a in all_addresses if not a.get('excluded', False)]
+
+                numero_processo = st.session_state['numero_processo']
+                email_selecionado = st.session_state.get('selected_email', '[Não informado]')
+
+                if "MODELO 1" in modelo:
+                    _gerar_modelo_1(doc, info, final_addresses, numero_processo, email_selecionado)
+
+                    buffer = BytesIO()
+                    doc.save(buffer)
+                    buffer.seek(0)
+                    output_filename = f"Notificacao_{numero_processo}.docx"
+                    st.download_button(
+                        label="Baixar Documento",
+                        data=buffer,
+                        file_name=output_filename,
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
+                    st.success("Documento (Modelo 1) gerado e pronto para download!")
+                    return
+
+                elif "MODELO 2" in modelo:
+                    st.info("Preencha dados adicionais para o Modelo 2 (serão coletados agora):")
+                    motivo_revisao = st.selectbox("Motivo da Revisão:", 
+                        ["insuficiencia_provas", "prescricao", "extincao_empresa", "outros"], 
+                        key="motivo_revisao_selectbox"
+                    )
+                    data_decisao = st.date_input("Data da Decisão:", key="data_decisao_input")
+                    data_recebimento_notificacao = st.date_input("Data de Recebimento da Notificação:", key="data_receb_input")
+
                     data_extincao = None
                     if motivo_revisao == "extincao_empresa":
-                        data_extincao = st.date_input("Data de Extinção da Empresa:")
+                        data_extincao = st.date_input("Data de Extinção da Empresa:", key="data_extincao_input")
 
-                    _gerar_modelo_2(
-                        doc, 
-                        info, 
-                        edited_addresses, 
-                        numero_processo, 
-                        motivo_revisao, 
-                        data_decisao, 
-                        data_recebimento_notificacao, 
-                        data_extincao,
-                        email_selecionado
-                    )
-                elif modelo == "ID 2703 - Notificação de decisão da DICOL":
-                    # Solicita informações adicionais para o modelo 3
-                    usuario_nome = st.text_input("Nome do Usuário:")
-                    usuario_email = st.text_input("Email do Usuário:")
-                    orgao_registro_comercial = st.text_input("Órgão de Registro Comercial:")
-                    _gerar_modelo_3(
-                        doc, 
-                        info, 
-                        edited_addresses, 
-                        numero_processo, 
-                        usuario_nome, 
-                        usuario_email, 
-                        orgao_registro_comercial,
-                        email_selecionado
-                    )
+                    if st.button("Gerar Modelo 2 Word"):
+                        doc = Document()
+                        _gerar_modelo_2(
+                            doc,
+                            info,
+                            final_addresses,
+                            numero_processo,
+                            motivo_revisao,
+                            data_decisao,
+                            data_recebimento_notificacao,
+                            data_extincao,
+                            email_selecionado
+                        )
+                        buffer = BytesIO()
+                        doc.save(buffer)
+                        buffer.seek(0)
+                        output_filename = f"Notificacao_{numero_processo}_modelo2.docx"
+                        st.download_button(
+                            label="Baixar Documento",
+                            data=buffer,
+                            file_name=output_filename,
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                        st.success("Documento (Modelo 2) gerado e pronto para download!")
+                    return
 
-                # Adicionar uma nota sobre a origem das informações no documento
-                adicionar_paragrafo(doc, f"\nInformações extraídas do arquivo PDF: {pdf_file_name}", negrito=False, tamanho=10)
+                elif "MODELO 3" in modelo:
+                    st.info("Preencha dados adicionais para o Modelo 3 (serão coletados agora):")
+                    usuario_nome = st.text_input("Nome do Usuário:", key="usuario_nome_input")
+                    usuario_email = st.text_input("Email do Usuário:", key="usuario_email_input")
+                    orgao_registro_comercial = st.text_input("Órgão de Registro Comercial:", key="orgao_registro_input")
 
-                # Salvar documento em buffer
-                buffer = BytesIO()
-                doc.save(buffer)
-                buffer.seek(0)
-
-                # Definir o nome do arquivo de saída
-                modelo_id = re.findall(r'ID\s(\d+)', modelo)[0] if re.findall(r'ID\s(\d+)', modelo) else "unknown"
-                output_filename = f"Notificacao_Processo_Nº_{numero_processo}_modelo_{modelo_id}.docx"
-
-                # Botão para download do documento gerado
-                st.download_button(
-                    label="Baixar Documento",
-                    data=buffer,
-                    file_name=output_filename,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-                st.success("Documento gerado e pronto para download!")
+                    if st.button("Gerar Modelo 3 Word"):
+                        doc = Document()
+                        _gerar_modelo_3(
+                            doc,
+                            info,
+                            final_addresses,
+                            numero_processo,
+                            usuario_nome,
+                            usuario_email,
+                            orgao_registro_comercial,
+                            email_selecionado
+                        )
+                        buffer = BytesIO()
+                        doc.save(buffer)
+                        buffer.seek(0)
+                        output_filename = f"Notificacao_{numero_processo}_modelo3.docx"
+                        st.download_button(
+                            label="Baixar Documento",
+                            data=buffer,
+                            file_name=output_filename,
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                        st.success("Documento (Modelo 3) gerado e pronto para download!")
+                    return
 
             except Exception as ex:
                 st.error(f"Ocorreu um erro ao gerar o documento: {ex}")
 
 if __name__ == '__main__':
-    # Carrega o modelo spaCy para português, instala se não estiver disponível
     try:
         nlp = spacy.load("pt_core_news_lg")
     except OSError:
