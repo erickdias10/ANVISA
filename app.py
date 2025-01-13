@@ -1103,10 +1103,10 @@ def main():
 
 if __name__ == '__main__':
     try:
-        nlp = spacy.load("pt_core_news_lg")
+        nlp = spacy.load("pt_core_news_sm")
     except OSError:
-        st.info("Modelo 'pt_core_news_lg' não encontrado. Instalando...")
-        os.system("python -m spacy download pt_core_news_lg")
-        nlp = spacy.load("pt_core_news_lg")
+        st.info("Modelo 'pt_core_news_sm' não encontrado. Instalando...")
+        os.system("python -m spacy download pt_core_news_sm")
+        nlp = spacy.load("pt_core_news_sm")
 
     main()
